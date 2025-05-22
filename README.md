@@ -11,7 +11,7 @@ Once the [ProxmoxVE Community Scripts](https://github.com/community-scripts/Prox
 To create a Byparr LXC container, run the command below **only** in the Proxmox VE Shell. This script will create and configure the container automatically.
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/byparr.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/ColterD/byparr-lxc/refs/heads/main/byparr.sh)"
 ```
 
 ### Original Work Credit
