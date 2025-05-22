@@ -1,279 +1,133 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2025 Colter Dahlberg (ColterD Fork)
-# Author: Colter Dahlberg (ColterD)
-# License: MIT | https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
-# Source: https://github.com/ThePhaseless/Byparr
+# Copyright (c) 2025 ColterD (Colter Dahlberg)
+# Author: ColterD (Colter Dahlberg)  
+# License: MIT
+# https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
 
-# Byparr LXC Container Creation Script for Proxmox VE
-# Creates a lightweight LXC container with Byparr - FlareSolverr alternative
-# This is a community fork - not officially part of community-scripts yet
-
-# Script metadata
-SCRIPT_VERSION="1.0.2"
-FORK_REPO_URL="https://raw.githubusercontent.com/ColterD/byparr-lxc/main"
-COMMUNITY_SCRIPTS_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func"
-
-# Application metadata
-APP="Byparr"
-APP_FULL="Byparr (ColterD Fork)"
-var_tags="captcha;solver;arr;proxy;flaresolverr;alternative;browser;automation"
-var_cpu="2"
-var_ram="2048"
-var_disk="4"
-var_os="debian"
-var_version="12"
-var_unprivileged="1"
-INSTALL_SCRIPT_URL="${FORK_REPO_URL}/install/byparr-install.sh"
-
-# Color definitions (used before framework loads)
-CL='\033[0m'
-RD='\033[1;31m'
-GN='\033[1;32m'
-YW='\033[1;33m'
-BL='\033[1;34m'
-CM='\033[1;35m'
-DGN='\033[0;32m'
-BGN='\033[1;96m'
-INFO="${GN}[INFO]${CL}"
-TAB='  '
-CREATING="${YW}Creating...${CL}"
-GATEWAY="${YW}Gateway:${CL}"
-
-# Basic functions (used before framework loads)
-msg_info() { echo -e "${YW}[INFO]${CL} $1"; }
-msg_ok() { echo -e "${GN}[OK]${CL} $1"; }
-msg_error() { echo -e "${RD}[ERROR]${CL} $1"; }
-
-# Fork notice function
-show_fork_notice() {
-    echo -e "${YW}╔════════════════════════════════════════════════════════════════╗${CL}"
-    echo -e "${YW}║${CL} ${RD}⚠️  NOTICE: ColterD Community Fork${CL}                              ${YW}║${CL}"
-    echo -e "${YW}║${CL} This is NOT an official community-scripts project (yet)        ${YW}║${CL}"
-    echo -e "${YW}║${CL} Official scripts: https://community-scripts.github.io/         ${YW}║${CL}"
-    echo -e "${YW}║${CL} Fork repo: https://github.com/ColterD/byparr-lxc             ${YW}║${CL}"
-    echo -e "${YW}╚════════════════════════════════════════════════════════════════╝${CL}"
-    echo
-    sleep 3
-}
-
-# Check if running on Proxmox
-check_proxmox() {
-    # Multiple checks for Proxmox VE
-    local is_proxmox=false
-    
-    # Check 1: pveversion command exists
-    if command -v pveversion >/dev/null 2>&1; then
-        is_proxmox=true
-        msg_ok "Detected Proxmox VE (pveversion found)"
-    # Check 2: pvesh command exists
-    elif command -v pvesh >/dev/null 2>&1; then
-        is_proxmox=true
-        msg_ok "Detected Proxmox VE (pvesh found)"
-    # Check 3: pct command exists (container management)
-    elif command -v pct >/dev/null 2>&1; then
-        is_proxmox=true
-        msg_ok "Detected Proxmox VE (pct found)"
-    # Check 4: /etc/pve directory exists
-    elif [[ -d /etc/pve ]]; then
-        is_proxmox=true
-        msg_ok "Detected Proxmox VE (/etc/pve found)"
-    # Check 5: proxmox-ve package installed
-    elif dpkg -l proxmox-ve >/dev/null 2>&1; then
-        is_proxmox=true
-        msg_ok "Detected Proxmox VE (proxmox-ve package)"
-    fi
-    
-    if [[ "$is_proxmox" != "true" ]]; then
-        msg_error "This script must be run on a Proxmox VE host"
-        msg_error "Current system: $(uname -n) - $(cat /etc/os-release | grep PRETTY_NAME | cut -d'"' -f2 2>/dev/null || uname -a)"
-        echo
-        echo -e "${YW}Required for this script:${CL}"
-        echo "  - Proxmox VE 7.0 or higher"
-        echo "  - Root access on the Proxmox host"
-        echo "  - Not inside a container or VM"
-        echo
-        echo -e "${YW}If you're sure this is Proxmox, check:${CL}"
-        echo "  - Are you running as root?"
-        echo "  - Are you on the host, not in a container?"
-        echo "  - Is Proxmox VE properly installed?"
-        exit 1
-    fi
-}
-
-# Show fork notice immediately
-show_fork_notice
-
-# Check Proxmox before attempting framework
-check_proxmox
-
-# Attempt to source the community-scripts framework
-msg_info "Loading community-scripts framework..."
-if curl -fsSL --max-time 10 "$COMMUNITY_SCRIPTS_URL" >/dev/null 2>&1; then
-    # Framework is accessible, source it
-    source <(curl -fsSL "$COMMUNITY_SCRIPTS_URL")
-    USING_FRAMEWORK=true
-    msg_ok "Framework loaded successfully"
-else
-    msg_error "Cannot access community-scripts framework"
-    echo -e "${YW}Possible causes:${CL}"
-    echo "  - GitHub is unreachable"
-    echo "  - Network connectivity issues"
-    echo "  - DNS resolution problems"
-    echo
-    echo -e "${YW}Troubleshooting:${CL}"
-    echo "1. Check internet connection:"
-    echo "   ping -c 4 github.com"
-    echo
-    echo "2. Test GitHub access:"
-    echo "   curl -I https://github.com"
-    echo
-    echo "3. Try alternative installation:"
-    echo "   wget ${FORK_REPO_URL}/ct/byparr.sh"
-    echo "   wget ${FORK_REPO_URL}/install/byparr-install.sh"
-    echo "   bash byparr.sh"
-    echo
-    msg_error "Cannot continue without framework access"
-    exit 1
-fi
-
-# Override description function to include fork notice
-description() {
-    cat <<EOF
-${APP_FULL} - FlareSolverr Alternative
-
-Byparr is a self-hosted drop-in replacement for FlareSolverr, providing
-reliable captcha solving and browser automation for your *arr applications.
-Built with FastAPI and nodriver for when FlareSolverr's solver is broken.
-
-${YW}⚠️  ColterD Fork Notice:${CL}
-This is a community fork, not yet part of official community-scripts.
-Once accepted, this notice will be removed.
-
-${GN}Key Features:${CL}
-- FlareSolverr-compatible API (port 8191)
-- Advanced browser automation with Chrome
-- Captcha solving capabilities
-- FastAPI-based for performance
-- Automatic updates with backup
-
-${BL}Resource Requirements:${CL}
-- CPU: 2 cores (browser operations)
-- RAM: 2GB minimum
-- Disk: 4GB
-- Network: Port 8191
-
-${RD}Credits:${CL}
-- Byparr by @ThePhaseless
-- Original script by @tanujdargan
-- Fork maintained by @ColterD
-EOF
-}
-
-# Update script function
-update_script() {
-    header_info
-    show_fork_notice
-    
-    if [[ ! -d /opt/byparr ]]; then
-        msg_error "No ${APP} Installation Found!"
-        exit 1
-    fi
-    
-    # Check if we have the update script
-    if [[ -x /opt/byparr/update-byparr.sh ]]; then
-        msg_info "Running ${APP} update script"
-        if /opt/byparr/update-byparr.sh; then
-            msg_ok "${APP} updated successfully"
-            echo -e "\n${GN}Update completed!${CL}"
-            echo -e "${YW}Note: This is the ColterD fork version${CL}"
-        else
-            msg_error "Update failed - check logs with: journalctl -u byparr -f"
-            exit 1
-        fi
-    else
-        msg_error "Update script not found at /opt/byparr/update-byparr.sh"
-        exit 1
-    fi
-    exit 0
-}
-
-# Custom install_script function for our fork
-custom_install_script() {
-    local install_url="$INSTALL_SCRIPT_URL"
-    
-    msg_info "Downloading installation script..."
-    if ! curl -fsSL --max-time 10 "$install_url" >/dev/null 2>&1; then
-        msg_error "Cannot access install script at: $install_url"
-        msg_error "Please check your internet connection and try again"
-        exit 1
-    fi
-    
-    # Download the install script
-    INSTALL_SCRIPT=$(curl -fsSL "$install_url")
-    if [[ -z "$INSTALL_SCRIPT" ]]; then
-        msg_error "Install script is empty or download failed"
-        exit 1
-    fi
-    
-    msg_info "Running installation inside container..."
-    # Pass the script content through STDIN with framework functions
-    if ! pct exec "$CTID" -- bash -c "
-        export FUNCTIONS_FILE_PATH='$(curl -fsSL ${COMMUNITY_SCRIPTS_URL})'
-        bash -s" <<< "$INSTALL_SCRIPT"; then
-        msg_error "Installation failed"
-        exit 1
-    fi
-}
-
-# Main execution with framework
-header_info "$APP"
-show_fork_notice
-
-# Check if this is an update request
-if command -v update_script >/dev/null 2>&1 && [[ "$1" == "update" ]]; then
-    update_script
-fi
-
-# Run the framework build process
-variables
+source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
 color
+verb_ip6
 catch_errors
+setting_up_container
+network_check
+update_os
 
-# Build container using framework
-msg_info "Starting container creation process..."
-start
-build_container
-description
+msg_info "Installing Dependencies"
+$STD apt-get install -y \
+  curl \
+  sudo \
+  mc \
+  git \
+  gpg \
+  wget \
+  gnupg \
+  ca-certificates \
+  apt-transport-https \
+  software-properties-common \
+  lsb-release
+msg_ok "Installed Dependencies"
 
-# Install Byparr using our custom function
-msg_info "Installing ${APP} (ColterD Fork)"
-custom_install_script
+msg_info "Installing Python 3.11"
+$STD apt-get install -y \
+  python3.11 \
+  python3.11-dev \
+  python3.11-venv \
+  python3-pip \
+  build-essential
+msg_ok "Installed Python 3.11"
 
-# Get container IP for display
-if [[ -n "$CTID" ]]; then
-    IP=$(pct exec "$CTID" hostname -I 2>/dev/null | awk '{print $1}')
-    if [[ -z "$IP" ]]; then
-        IP="[CONTAINER-IP]"
-    fi
-else
-    IP="[CONTAINER-IP]"
-fi
+msg_info "Installing Google Chrome"
+wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+$STD apt-get update
+$STD apt-get install -y google-chrome-stable
+msg_ok "Installed Google Chrome"
 
-# Completion message
-msg_ok "Completed Successfully!\n"
-echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-echo -e "${YW}╔════════════════════════════════════════════════════════════════╗${CL}"
-echo -e "${YW}║${CL} ${GN}✓ Byparr (ColterD Fork) Installation Complete${CL}                 ${YW}║${CL}"
-echo -e "${YW}╚════════════════════════════════════════════════════════════════╝${CL}\n"
-echo -e "${INFO}${YW} Access Byparr at:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8191${CL}\n"
-echo -e "${INFO}${YW} Configure your *arr applications:${CL}"
-echo -e "${TAB}${YW}FlareSolverr URL: ${CL}${DGN}http://${IP}:8191${CL}\n"
-echo -e "${INFO}${YW} Service Management:${CL}"
-echo -e "${TAB}${CM}systemctl status byparr${CL} - Check status"
-echo -e "${TAB}${CM}journalctl -u byparr -f${CL} - View logs"
-echo -e "${TAB}${CM}/opt/byparr/update-byparr.sh${CL} - Update Byparr\n"
-echo -e "${INFO}${YW} Fork Information:${CL}"
-echo -e "${TAB}Repo: ${DGN}https://github.com/ColterD/byparr-lxc${CL}"
-echo -e "${TAB}Based on: ${DGN}https://github.com/ThePhaseless/Byparr${CL}"
+msg_info "Installing Display Server Dependencies"
+$STD apt-get install -y \
+  xvfb \
+  x11-xserver-utils \
+  xfonts-100dpi \
+  xfonts-75dpi \
+  xfonts-base \
+  xfonts-scalable \
+  libgtk-3-0 \
+  libglib2.0-0 \
+  libnss3 \
+  libatk1.0-0 \
+  libatk-bridge2.0-0 \
+  libcups2 \
+  libdrm2 \
+  libxkbcommon0 \
+  libxcomposite1 \
+  libxdamage1 \
+  libxrandr2 \
+  libgbm1 \
+  libpango-1.0-0 \
+  libasound2
+msg_ok "Installed Display Server Dependencies"
+
+msg_info "Installing UV Package Manager"
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source /root/.local/bin/env
+msg_ok "Installed UV Package Manager"
+
+msg_info "Installing Byparr"
+cd /opt
+git clone -q https://github.com/ThePhaseless/Byparr.git byparr
+cd byparr
+/root/.local/bin/uv sync
+msg_ok "Installed Byparr"
+
+msg_info "Creating Service"
+cat <<EOF >/etc/systemd/system/byparr.service
+[Unit]
+Description=Byparr - FlareSolverr Alternative
+Documentation=https://github.com/ThePhaseless/Byparr
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/byparr
+Environment="PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="DISPLAY=:99"
+Environment="HOME=/root"
+ExecStartPre=/bin/bash -c 'pkill -f "Xvfb :99" || true'
+ExecStartPre=/bin/bash -c 'Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &'
+ExecStartPre=/bin/sleep 2
+ExecStart=/root/.local/bin/uv run python -m byparr
+ExecStop=/bin/bash -c 'pkill -f "Xvfb :99" || true'
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable -q --now byparr.service
+msg_ok "Created Service"
+
+msg_info "Creating Update Script"
+cat <<'EOF' >/opt/update-byparr.sh
+#!/bin/bash
+set -e
+echo "Updating Byparr..."
+systemctl stop byparr
+cd /opt/byparr
+git pull
+/root/.local/bin/uv sync
+systemctl start byparr
+echo "Byparr updated successfully!"
+EOF
+chmod +x /opt/update-byparr.sh
+msg_ok "Created Update Script"
+
+motd_ssh
+customize
+
+msg_info "Cleaning up"
+$STD apt-get -y autoremove
+$STD apt-get -y autoclean
+msg_ok "Cleaned"
