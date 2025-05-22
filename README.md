@@ -4,6 +4,8 @@
 
 This repository contains refactored installation scripts for **Byparr** - a self-hosted and open-source drop-in replacement for FlareSolverr. Byparr is built with FastAPI and nodriver, providing a reliable solution for solving captchas and browser challenges for your *arr applications when FlareSolverr's captcha solver is broken.
 
+Once the [ProxmoxVE Community Scripts](https://github.com/community-scripts/ProxmoxVE) project builds their own version of the Byparr LXC script, this repository will be deprecated.
+
 ### Original Work Credit
 
 This project builds upon work from multiple contributors:
