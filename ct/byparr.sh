@@ -9,18 +9,10 @@
 # Creates a lightweight LXC container with Byparr - FlareSolverr alternative
 # This is a community fork - not officially part of community-scripts yet
 
-# Attempt to source the community-scripts framework
-COMMUNITY_SCRIPTS_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func"
+# Script metadata
+SCRIPT_VERSION="1.0.1"
 FORK_REPO_URL="https://raw.githubusercontent.com/ColterD/byparr-lxc/main"
-
-# Try to detect if we can use the community framework
-if curl -fsSL --max-time 5 "$COMMUNITY_SCRIPTS_URL" >/dev/null 2>&1; then
-    source <(curl -fsSL "$COMMUNITY_SCRIPTS_URL")
-    USING_FRAMEWORK=true
-else
-    echo "Warning: Cannot access community-scripts framework, using embedded version"
-    USING_FRAMEWORK=false
-fi
+COMMUNITY_SCRIPTS_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func"
 
 # Application metadata
 APP="Byparr"
@@ -34,26 +26,86 @@ var_version="12"
 var_unprivileged="1"
 INSTALL_SCRIPT_URL="${FORK_REPO_URL}/install/byparr-install.sh"
 
+# Color definitions (used before framework loads)
+CL='\033[0m'
+RD='\033[1;31m'
+GN='\033[1;32m'
+YW='\033[1;33m'
+BL='\033[1;34m'
+CM='\033[1;35m'
+DGN='\033[0;32m'
+BGN='\033[1;96m'
+INFO="${GN}[INFO]${CL}"
+TAB='  '
+CREATING="${YW}Creating...${CL}"
+GATEWAY="${YW}Gateway:${CL}"
+
+# Basic functions (used before framework loads)
+msg_info() { echo -e "${YW}[INFO]${CL} $1"; }
+msg_ok() { echo -e "${GN}[OK]${CL} $1"; }
+msg_error() { echo -e "${RD}[ERROR]${CL} $1"; }
+
 # Fork notice function
 show_fork_notice() {
-    if [ "$USING_FRAMEWORK" = true ]; then
-        echo -e "${YW}╔════════════════════════════════════════════════════════════════╗${CL}"
-        echo -e "${YW}║${CL} ${RD}⚠️  NOTICE: ColterD Community Fork${CL}                              ${YW}║${CL}"
-        echo -e "${YW}║${CL} This is NOT an official community-scripts project (yet)        ${YW}║${CL}"
-        echo -e "${YW}║${CL} Official scripts: https://community-scripts.github.io/         ${YW}║${CL}"
-        echo -e "${YW}║${CL} Fork repo: https://github.com/ColterD/byparr-lxc             ${YW}║${CL}"
-        echo -e "${YW}╚════════════════════════════════════════════════════════════════╝${CL}"
-    else
-        echo "╔════════════════════════════════════════════════════════════════╗"
-        echo "║ ⚠️  NOTICE: ColterD Community Fork                              ║"
-        echo "║ This is NOT an official community-scripts project (yet)        ║"
-        echo "║ Official scripts: https://community-scripts.github.io/         ║"
-        echo "║ Fork repo: https://github.com/ColterD/byparr-lxc             ║"
-        echo "╚════════════════════════════════════════════════════════════════╝"
-    fi
+    echo -e "${YW}╔════════════════════════════════════════════════════════════════╗${CL}"
+    echo -e "${YW}║${CL} ${RD}⚠️  NOTICE: ColterD Community Fork${CL}                              ${YW}║${CL}"
+    echo -e "${YW}║${CL} This is NOT an official community-scripts project (yet)        ${YW}║${CL}"
+    echo -e "${YW}║${CL} Official scripts: https://community-scripts.github.io/         ${YW}║${CL}"
+    echo -e "${YW}║${CL} Fork repo: https://github.com/ColterD/byparr-lxc             ${YW}║${CL}"
+    echo -e "${YW}╚════════════════════════════════════════════════════════════════╝${CL}"
     echo
     sleep 3
 }
+
+# Check if running on Proxmox
+check_proxmox() {
+    if ! command -v pct >/dev/null 2>&1; then
+        msg_error "This script must be run on a Proxmox VE host"
+        msg_error "Current system: $(uname -a)"
+        exit 1
+    fi
+    
+    if [[ ! -f /etc/pve/version ]]; then
+        msg_error "Proxmox VE not detected. This script requires Proxmox VE."
+        exit 1
+    fi
+}
+
+# Show fork notice immediately
+show_fork_notice
+
+# Check Proxmox before attempting framework
+check_proxmox
+
+# Attempt to source the community-scripts framework
+msg_info "Loading community-scripts framework..."
+if curl -fsSL --max-time 10 "$COMMUNITY_SCRIPTS_URL" >/dev/null 2>&1; then
+    # Framework is accessible, source it
+    source <(curl -fsSL "$COMMUNITY_SCRIPTS_URL")
+    USING_FRAMEWORK=true
+    msg_ok "Framework loaded successfully"
+else
+    msg_error "Cannot access community-scripts framework"
+    echo -e "${YW}Possible causes:${CL}"
+    echo "  - GitHub is unreachable"
+    echo "  - Network connectivity issues"
+    echo "  - DNS resolution problems"
+    echo
+    echo -e "${YW}Troubleshooting:${CL}"
+    echo "1. Check internet connection:"
+    echo "   ping -c 4 github.com"
+    echo
+    echo "2. Test GitHub access:"
+    echo "   curl -I https://github.com"
+    echo
+    echo "3. Try alternative installation:"
+    echo "   wget ${FORK_REPO_URL}/ct/byparr.sh"
+    echo "   wget ${FORK_REPO_URL}/install/byparr-install.sh"
+    echo "   bash byparr.sh"
+    echo
+    msg_error "Cannot continue without framework access"
+    exit 1
+fi
 
 # Override description function to include fork notice
 description() {
@@ -116,120 +168,82 @@ update_script() {
     exit 0
 }
 
-# Main execution based on framework availability
-if [ "$USING_FRAMEWORK" = true ]; then
-    # Use community-scripts framework
-    header_info "$APP"
-    show_fork_notice
+# Custom install_script function for our fork
+custom_install_script() {
+    local install_url="$INSTALL_SCRIPT_URL"
     
-    # Check if this is an update request
-    if command -v update_script >/dev/null 2>&1 && [[ "$1" == "update" ]]; then
-        update_script
-    fi
-    
-    # Run the framework build process
-    variables
-    color
-    catch_errors
-    
-    # Custom function to handle our install script location
-    function install_script() {
-        local install_url="$INSTALL_SCRIPT_URL"
-        
-        if ! curl -fsSL --max-time 10 "$install_url" >/dev/null 2>&1; then
-            msg_error "Cannot access install script at: $install_url"
-            msg_error "Please check your internet connection and try again"
-            exit 1
-        fi
-        
-        # Use STDIN method to pass script to container
-        INSTALL_SCRIPT=$(curl -fsSL "$install_url")
-        if [[ -z "$INSTALL_SCRIPT" ]]; then
-            msg_error "Install script is empty or download failed"
-            exit 1
-        fi
-        
-        # Pass the script content through STDIN
-        pct exec "$CTID" -- bash -c "
-            export FUNCTIONS_FILE_PATH='$(curl -fsSL ${COMMUNITY_SCRIPTS_URL})'
-            bash -s" <<< "$INSTALL_SCRIPT"
-    }
-    
-    # Override the default install_script behavior
-    sed -i 's|^install_script$|# Overridden by custom install_script|g' /tmp/build.func 2>/dev/null || true
-    
-    # Build container
-    start
-    build_container
-    description
-    
-    # Run our custom install
-    msg_info "Installing ${APP} (ColterD Fork)"
-    install_script
-    
-    # Completion message
-    msg_ok "Completed Successfully!\n"
-    echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
-    echo -e "${YW}╔════════════════════════════════════════════════════════════════╗${CL}"
-    echo -e "${YW}║${CL} ${GN}✓ Byparr (ColterD Fork) Installation Complete${CL}                 ${YW}║${CL}"
-    echo -e "${YW}╚════════════════════════════════════════════════════════════════╝${CL}\n"
-    IP=$(pct exec "$CTID" hostname -I | awk '{print $1}')
-    echo -e "${INFO}${YW} Access Byparr at:${CL}"
-    echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8191${CL}\n"
-    echo -e "${INFO}${YW} Configure your *arr applications:${CL}"
-    echo -e "${TAB}${YW}FlareSolverr URL: ${CL}${DGN}http://${IP}:8191${CL}\n"
-    echo -e "${INFO}${YW} Service Management:${CL}"
-    echo -e "${TAB}${CM}systemctl status byparr${CL} - Check status"
-    echo -e "${TAB}${CM}journalctl -u byparr -f${CL} - View logs"
-    echo -e "${TAB}${CM}/opt/byparr/update-byparr.sh${CL} - Update Byparr\n"
-    echo -e "${INFO}${YW} Fork Information:${CL}"
-    echo -e "${TAB}Repo: ${DGN}https://github.com/ColterD/byparr-lxc${CL}"
-    echo -e "${TAB}Based on: ${DGN}https://github.com/ThePhaseless/Byparr${CL}"
-    
-else
-    # Fallback: Embedded minimal framework
-    echo "Using embedded framework (limited functionality)"
-    show_fork_notice
-    
-    # Basic color definitions
-    CL='\033[0m'
-    RD='\033[1;31m'
-    GN='\033[1;32m'
-    YW='\033[1;33m'
-    BL='\033[1;34m'
-    CM='\033[1;35m'
-    DGN='\033[0;32m'
-    
-    # Basic functions
-    msg_info() { echo -e "${YW}[INFO]${CL} $1"; }
-    msg_ok() { echo -e "${GN}[OK]${CL} $1"; }
-    msg_error() { echo -e "${RD}[ERROR]${CL} $1"; }
-    
-    # Check if running on Proxmox
-    if ! command -v pct >/dev/null 2>&1; then
-        msg_error "This script must be run on a Proxmox VE host"
+    msg_info "Downloading installation script..."
+    if ! curl -fsSL --max-time 10 "$install_url" >/dev/null 2>&1; then
+        msg_error "Cannot access install script at: $install_url"
+        msg_error "Please check your internet connection and try again"
         exit 1
     fi
     
-    # Simple container creation
-    msg_info "Creating container without full framework support"
-    msg_error "For best experience, ensure access to:"
-    echo "  ${COMMUNITY_SCRIPTS_URL}"
-    msg_info "Attempting basic container creation..."
+    # Download the install script
+    INSTALL_SCRIPT=$(curl -fsSL "$install_url")
+    if [[ -z "$INSTALL_SCRIPT" ]]; then
+        msg_error "Install script is empty or download failed"
+        exit 1
+    fi
     
-    # You would need to implement basic container creation here
-    # This is complex without the framework, so we'll exit with instructions
-    
-    echo
-    msg_error "Cannot proceed without framework access"
-    echo "Please try:"
-    echo "1. Check your internet connection"
-    echo "2. Ensure GitHub is accessible"
-    echo "3. Try again later"
-    echo
-    echo "Alternative: Download and run locally:"
-    echo "  wget ${FORK_REPO_URL}/ct/byparr.sh"
-    echo "  wget ${FORK_REPO_URL}/install/byparr-install.sh"
-    echo "  bash byparr.sh"
-    exit 1
+    msg_info "Running installation inside container..."
+    # Pass the script content through STDIN with framework functions
+    if ! pct exec "$CTID" -- bash -c "
+        export FUNCTIONS_FILE_PATH='$(curl -fsSL ${COMMUNITY_SCRIPTS_URL})'
+        bash -s" <<< "$INSTALL_SCRIPT"; then
+        msg_error "Installation failed"
+        exit 1
+    fi
+}
+
+# Main execution with framework
+header_info "$APP"
+show_fork_notice
+
+# Check if this is an update request
+if command -v update_script >/dev/null 2>&1 && [[ "$1" == "update" ]]; then
+    update_script
 fi
+
+# Run the framework build process
+variables
+color
+catch_errors
+
+# Build container using framework
+msg_info "Starting container creation process..."
+start
+build_container
+description
+
+# Install Byparr using our custom function
+msg_info "Installing ${APP} (ColterD Fork)"
+custom_install_script
+
+# Get container IP for display
+if [[ -n "$CTID" ]]; then
+    IP=$(pct exec "$CTID" hostname -I 2>/dev/null | awk '{print $1}')
+    if [[ -z "$IP" ]]; then
+        IP="[CONTAINER-IP]"
+    fi
+else
+    IP="[CONTAINER-IP]"
+fi
+
+# Completion message
+msg_ok "Completed Successfully!\n"
+echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
+echo -e "${YW}╔════════════════════════════════════════════════════════════════╗${CL}"
+echo -e "${YW}║${CL} ${GN}✓ Byparr (ColterD Fork) Installation Complete${CL}                 ${YW}║${CL}"
+echo -e "${YW}╚════════════════════════════════════════════════════════════════╝${CL}\n"
+echo -e "${INFO}${YW} Access Byparr at:${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8191${CL}\n"
+echo -e "${INFO}${YW} Configure your *arr applications:${CL}"
+echo -e "${TAB}${YW}FlareSolverr URL: ${CL}${DGN}http://${IP}:8191${CL}\n"
+echo -e "${INFO}${YW} Service Management:${CL}"
+echo -e "${TAB}${CM}systemctl status byparr${CL} - Check status"
+echo -e "${TAB}${CM}journalctl -u byparr -f${CL} - View logs"
+echo -e "${TAB}${CM}/opt/byparr/update-byparr.sh${CL} - Update Byparr\n"
+echo -e "${INFO}${YW} Fork Information:${CL}"
+echo -e "${TAB}Repo: ${DGN}https://github.com/ColterD/byparr-lxc${CL}"
+echo -e "${TAB}Based on: ${DGN}https://github.com/ThePhaseless/Byparr${CL}"
