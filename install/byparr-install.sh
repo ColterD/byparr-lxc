@@ -5,7 +5,12 @@
 # License: MIT
 # https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
 
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+# Source functions if provided
+if [[ -n "${FUNCTIONS_FILE_PATH:-}" ]]; then
+  source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+fi
+
+# Set up environment
 color
 verb_ip6
 catch_errors
