@@ -6,6 +6,14 @@ This repository contains refactored installation scripts for **Byparr** - a self
 
 Once the [ProxmoxVE Community Scripts](https://github.com/community-scripts/ProxmoxVE) project builds their own version of the Byparr LXC script, this repository will be deprecated.
 
+## Quick Start
+
+To create a Byparr LXC container, run the command below **only** in the Proxmox VE Shell. This script will create and configure the container automatically.
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/byparr.sh)"
+```
+
 ### Original Work Credit
 
 This project builds upon work from multiple contributors:
