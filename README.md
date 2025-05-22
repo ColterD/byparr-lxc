@@ -1,19 +1,22 @@
 # Byparr Installation Scripts for Proxmox VE
 
-![Byparr Logo](https://raw.githubusercontent.com/ThePhaseless/Byparr/main/logo.png)
-
 ## About
 
 This repository contains refactored installation scripts for **Byparr** - a self-hosted and open-source drop-in replacement for FlareSolverr. Byparr is built with FastAPI and nodriver, providing a reliable solution for solving captchas and browser challenges for your *arr applications when FlareSolverr's captcha solver is broken.
 
 ### Original Work Credit
 
-This project is forked and refactored from the initial work by **[@tanujdargan](https://github.com/tanujdargan)**:
+This project builds upon work from multiple contributors:
 
+**Byparr Application**: Created by **[@ThePhaseless](https://github.com/ThePhaseless)**
+- **Byparr Project**: [https://github.com/ThePhaseless/Byparr](https://github.com/ThePhaseless/Byparr)
+- The core application that provides FlareSolverr replacement functionality
+
+**Proxmox Installation Script**: Created by **[@tanujdargan](https://github.com/tanujdargan)**
 - **Original Script**: [byparr-install.sh](https://github.com/tanujdargan/ProxmoxVE/blob/main/install/byparr-install.sh)
 - **Original Pull Request**: [community-scripts/ProxmoxVE #2959](https://github.com/community-scripts/ProxmoxVE/pull/2959)
 
-Special thanks to tanujdargan for the initial implementation and contribution to the community!
+Special thanks to **ThePhaseless** for creating the excellent Byparr application and to **tanujdargan** for the initial Proxmox installation script implementation and contribution to the community!
 
 ## What This Refactored Version Provides
 
