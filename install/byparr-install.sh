@@ -30,9 +30,12 @@ error_handler() {
     fi
   fi
 
-  # Robustly kill spinner: Check if SPINNER_PID is set and refers to a running process
-  if [ -n "${SPINNER_PID:-}" ] && ps -p "${SPINNER_PID:-}" >/dev/null 2>&1; then
-    kill "${SPINNER_PID:-}" >/dev/null 2>&1
+  # Robustly kill spinner:
+  local current_spinner_pid="${SPINNER_PID:-}" # Safely get the value, defaulting to empty if unset
+  if [ -n "$current_spinner_pid" ]; then     # Check if it's not empty
+      if ps -p "$current_spinner_pid" >/dev/null 2>&1; then # Check if process exists
+          kill "$current_spinner_pid" >/dev/null 2>&1
+      fi
   fi
   printf "\e[?25h" # Ensure cursor is visible
 
@@ -141,7 +144,7 @@ msg_info "Installing Byparr"
 cd /opt || exit
 git clone -q https://github.com/ThePhaseless/Byparr.git byparr
 cd byparr || exit
-uv sync
+uv sync >/dev/null
 msg_ok "Installed Byparr"
 
 msg_info "Creating Service"
