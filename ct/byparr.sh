@@ -65,6 +65,7 @@ build_container() {
   # if [ "$VERB" == "yes" ]; then set -x; fi
 
   # Set container features based on whether it's privileged or unprivileged
+  # shellcheck disable=SC2153 # CT_TYPE is set by sourced build.func environment
   if [ "$CT_TYPE" == "1" ]; then # Unprivileged container
     FEATURES="keyctl=1,nesting=1"
   else # Privileged container
@@ -86,7 +87,7 @@ build_container() {
   # Ensure we return to the original directory and clean up the temp directory on exit
   # Not using trap here as build.func might have its own trap logic.
   # Relying on TEMP_DIR cleanup within this function or by the main script's exit handlers (if any).
-  pushd "$TEMP_DIR" >/dev/null
+  pushd "$TEMP_DIR" >/dev/null || exit 1
 
   # Download the appropriate installation functions based on the OS
   if [ "$var_os" == "alpine" ]; then
@@ -95,7 +96,7 @@ build_container() {
     FUNC_EXIT_CODE=$?
     if [ "$FUNC_EXIT_CODE" -ne 0 ]; then
       echo "Error: Failed to download alpine-install.func from '$ALPINE_INSTALL_FUNC_URL'. Curl exit code: $FUNC_EXIT_CODE" >&2
-      popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+      popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
     fi
     export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   else # For Debian, Ubuntu, etc.
@@ -104,7 +105,7 @@ build_container() {
     FUNC_EXIT_CODE=$?
     if [ "$FUNC_EXIT_CODE" -ne 0 ]; then
       echo "Error: Failed to download install.func from '$INSTALL_FUNC_URL'. Curl exit code: $FUNC_EXIT_CODE" >&2
-      popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+      popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
     fi
     export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   fi
@@ -113,7 +114,9 @@ build_container() {
   export RANDOM_UUID="$RANDOM_UUID"
   export CACHER="$APT_CACHER"
   export CACHER_IP="$APT_CACHER_IP"
+  # shellcheck disable=SC2154 # timezone is set by sourced build.func environment
   export tz="$timezone"
+  # shellcheck disable=SC2153 # DISABLEIP6 is set by sourced build.func environment
   export DISABLEIPV6="$DISABLEIP6"
   export APPLICATION="$APP"
   export app="$NSAPP" # Namespaced application name
@@ -149,7 +152,7 @@ build_container() {
   CREATE_LXC_EXIT_CODE=$?
   if [ "$CREATE_LXC_EXIT_CODE" -ne 0 ]; then
     echo "Error: Failed to download create_lxc.sh from '$CREATE_LXC_URL'. Curl exit code: $CREATE_LXC_EXIT_CODE" >&2
-    popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+    popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
   fi
 
   # Execute the create_lxc.sh script in a subshell
@@ -179,6 +182,7 @@ file
 EOF
   fi
 
+  # shellcheck disable=SC2050 # Structure inherited from build.func for VAAPI
   if [ "$CT_TYPE" == "0" ]; then
     if [[ "$APP" == "Channels" || "$APP" == "Emby" || "$APP" == "ErsatzTV" || "$
 APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry\
@@ -198,6 +202,7 @@ EOF
     fi
   else # Unprivileged container
     # Check for specific applications that need VAAPI hardware transcoding
+    # shellcheck disable=SC2050 # Structure inherited from build.func for VAAPI
     if [[ "$APP" == "Channels" || "$APP" == "Emby" || "$APP" == "ErsatzTV" || "$
 APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry\
 pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP\
@@ -247,11 +252,11 @@ EOF'
   INSTALLER_SCRIPT_EXIT_CODE=$?
   if [ "$INSTALLER_SCRIPT_EXIT_CODE" -ne 0 ]; then
     echo "Error: Failed to download installer script from '${actual_installer_url}'. Curl exit code: $INSTALLER_SCRIPT_EXIT_CODE" >&2
-    popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+    popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
   fi
 
   # Return to the original directory and remove the temporary directory
-  popd >/dev/null
+  popd >/dev/null || exit 1
   rm -rf "$TEMP_DIR"
 
   # Attach to the container and execute the downloaded installer script
