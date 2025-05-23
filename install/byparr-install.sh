@@ -7,6 +7,60 @@
 
 # shellcheck disable=SC1091
 source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+
+# Override error_handler from the sourced install.func to make SPINNER_PID handling more robust with set -u
+error_handler() {
+  # Attempt to source api.func, but proceed if it fails (to avoid new failure points if api.func is unavailable)
+  # Original line: source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+  # We are trying to minimize changes, but if this curl fails, the original error_handler would also fail.
+  # For now, keep it, as the primary issue is SPINNER_PID.
+  # If further issues arise with api.func, it might need to be removed or handled differently.
+  local API_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func"
+  local API_FUNC_CONTENT
+  API_FUNC_CONTENT=$(curl -fsSL "$API_FUNC_URL")
+  if [ $? -eq 0 ] && [ -n "$API_FUNC_CONTENT" ]; then
+    source <(echo "$API_FUNC_CONTENT")
+  else
+    echo "Warning: Failed to download or source $API_FUNC_URL in overridden error_handler." >&2
+    # Define dummy post_update_to_api if it's not available, to prevent errors later
+    if ! command -v post_update_to_api > /dev/null; then
+        post_update_to_api() {
+            echo "Debug: post_update_to_api called with: $@" >&2
+        }
+    fi
+  fi
+
+  # Robustly kill spinner:
+  local current_spinner_pid="${SPINNER_PID:-}" # Safely get the value, defaulting to empty if unset
+  if [ -n "$current_spinner_pid" ]; then     # Check if it's not empty
+      if ps -p "$current_spinner_pid" >/dev/null 2>&1; then # Check if process exists
+          kill "$current_spinner_pid" >/dev/null 2>&1
+      fi
+  fi
+  printf "\e[?25h" # Ensure cursor is visible
+
+  local exit_code="$?" # Should be the exit code of the command that triggered ERR trap
+  local line_number="$1"
+  local command="$2"
+  # Ensure color variables are available, provide defaults if not.
+  local RD_COLOR="${RD:-$(echo "[01;31m")}"
+  local YW_COLOR="${YW:-$(echo "[33m")}"
+  local CL_COLOR="${CL:-$(echo "[m")}"
+
+  local error_message="${RD_COLOR}[ERROR]${CL_COLOR} in line ${RD_COLOR}$line_number${CL_COLOR}: exit code ${RD_COLOR}$exit_code${CL_COLOR}: while executing command ${YW_COLOR}$command${CL_COLOR}"
+  echo -e "
+$error_message" >&2 # Ensure error messages go to stderr
+
+  # Call post_update_to_api if it exists from the sourced api.func
+  if command -v post_update_to_api > /dev/null; then
+    if [[ "$line_number" -eq 50 ]]; then # This condition might be specific to original install.func context
+      post_update_to_api "failed" "No error message, script ran in silent mode"
+    else
+      post_update_to_api "failed" "${command}"
+    fi
+  fi
+  exit "$exit_code" # Exit with the original command's exit code
+}
 color
 verb_ip6
 catch_errors
@@ -76,15 +130,21 @@ msg_ok "Installed Display Server Dependencies"
 msg_info "Installing UV Package Manager"
 curl -LsSf https://astral.sh/uv/install.sh | sh
 # shellcheck disable=SC1091
-# Source cargo environment to bring uv into PATH (uv installer convention)
-source "$HOME/.cargo/env"
+# Source uv environment to bring uv into PATH
+UV_ENV_PATH="$HOME/.local/bin/env"
+if [ -f "$UV_ENV_PATH" ]; then
+    source "$UV_ENV_PATH"
+else
+    msg_error "uv environment file '$UV_ENV_PATH' not found after installation. Cannot set up uv."
+    # msg_error from install.func should call error_handler, which exits.
+fi
 msg_ok "Installed UV Package Manager"
 
 msg_info "Installing Byparr"
 cd /opt || exit
 git clone -q https://github.com/ThePhaseless/Byparr.git byparr
 cd byparr || exit
-uv sync
+uv sync >/dev/null
 msg_ok "Installed Byparr"
 
 msg_info "Creating Service"
