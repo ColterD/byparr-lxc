@@ -55,7 +55,7 @@ var_version="12"
 # These variables are used by the community-scripts framework
 variables # This function is sourced from build.func
 actual_installer_url="${FORK_REPO_URL}/install/byparr-install.sh"
-color # This function is sourced from build.func
+color        # This function is sourced from build.func
 catch_errors # This function is sourced from build.func
 
 # This function is an overridden version of 'build_container' from the sourced build.func.
@@ -96,7 +96,9 @@ build_container() {
     FUNC_EXIT_CODE=$?
     if [ "$FUNC_EXIT_CODE" -ne 0 ]; then
       echo "Error: Failed to download alpine-install.func from '$ALPINE_INSTALL_FUNC_URL'. Curl exit code: $FUNC_EXIT_CODE" >&2
-      popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+      popd >/dev/null || exit 1
+      rm -rf "$TEMP_DIR"
+      exit 1 # Cleanup and exit
     fi
     export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   else # For Debian, Ubuntu, etc.
@@ -105,7 +107,9 @@ build_container() {
     FUNC_EXIT_CODE=$?
     if [ "$FUNC_EXIT_CODE" -ne 0 ]; then
       echo "Error: Failed to download install.func from '$INSTALL_FUNC_URL'. Curl exit code: $FUNC_EXIT_CODE" >&2
-      popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+      popd >/dev/null || exit 1
+      rm -rf "$TEMP_DIR"
+      exit 1 # Cleanup and exit
     fi
     export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   fi
@@ -122,7 +126,7 @@ build_container() {
   export app="$NSAPP" # Namespaced application name
   export PASSWORD="$PW"
   export VERBOSE="$VERB"
-  export SSH_ROOT="${SSH}" # Note: ${SSH} is typically 'yes' or 'no', ensure quoting if it could contain spaces
+  export SSH_ROOT="${SSH}"  # Note: ${SSH} is typically 'yes' or 'no', ensure quoting if it could contain spaces
   export SSH_AUTHORIZED_KEY # This variable would contain the actual key
   export CTID="$CT_ID"
   export CTTYPE="$CT_TYPE"
@@ -152,7 +156,9 @@ build_container() {
   CREATE_LXC_EXIT_CODE=$?
   if [ "$CREATE_LXC_EXIT_CODE" -ne 0 ]; then
     echo "Error: Failed to download create_lxc.sh from '$CREATE_LXC_URL'. Curl exit code: $CREATE_LXC_EXIT_CODE" >&2
-    popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+    popd >/dev/null || exit 1
+    rm -rf "$TEMP_DIR"
+    exit 1 # Cleanup and exit
   fi
 
   # Execute the create_lxc.sh script in a subshell
@@ -186,8 +192,7 @@ EOF
   if [ "$CT_TYPE" == "0" ]; then
     if [[ "$APP" == "Channels" || "$APP" == "Emby" || "$APP" == "ErsatzTV" || "$
 APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry\
-pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP\
-" == "FileFlows" ]]; then
+pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP" == "FileFlows" ]]; then
       # Add VAAPI hardware transcoding settings for specific applications
       cat <<EOF >>"$LXC_CONFIG"
 # VAAPI hardware transcoding
@@ -205,8 +210,7 @@ EOF
     # shellcheck disable=SC2050 # Structure inherited from build.func for VAAPI
     if [[ "$APP" == "Channels" || "$APP" == "Emby" || "$APP" == "ErsatzTV" || "$
 APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry\
-pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP\
-" == "FileFlows" ]]; then
+pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP" == "FileFlows" ]]; then
       # Check for the existence of renderD128 and card0/card1
       if [[ -e "/dev/dri/renderD128" ]]; then
         if [[ -e "/dev/dri/card0" ]]; then # Prefer card0 if it exists
@@ -252,7 +256,9 @@ EOF'
   INSTALLER_SCRIPT_EXIT_CODE=$?
   if [ "$INSTALLER_SCRIPT_EXIT_CODE" -ne 0 ]; then
     echo "Error: Failed to download installer script from '${actual_installer_url}'. Curl exit code: $INSTALLER_SCRIPT_EXIT_CODE" >&2
-    popd >/dev/null || exit 1; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
+    popd >/dev/null || exit 1
+    rm -rf "$TEMP_DIR"
+    exit 1 # Cleanup and exit
   fi
 
   # Return to the original directory and remove the temporary directory
@@ -266,9 +272,9 @@ EOF'
 } # End of build_container function
 
 # Main script execution starts here
-start # This function is sourced from build.func, likely handles initial setup and user prompts
+start           # This function is sourced from build.func, likely handles initial setup and user prompts
 build_container # Call our overridden build_container function
-description # This function is sourced from build.func, likely displays summary information
+description     # This function is sourced from build.func, likely displays summary information
 
 # Final permission settings for the container
 msg_info "Setting Container Permissions"

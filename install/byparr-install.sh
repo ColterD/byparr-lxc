@@ -3,13 +3,13 @@ declare -g SPINNER_PID=""
 export SPINNER_PID
 
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
-# Author: ColterD (Colter Dahlberg)  
+# Author: ColterD (Colter Dahlberg)
 # License: MIT
 # https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
 
 # shellcheck disable=SC1091
 # Source common functions from the path provided by the main script (ct/byparr.sh)
-source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+source /dev/stdin <<<"$FUNCTIONS_FILE_PATH"
 
 # --- Script Configuration and Constants ---
 # URLs for external resources
@@ -34,17 +34,17 @@ error_handler() {
     else
       echo "Warning: Downloaded empty content from '$API_FUNC_URL' in overridden error_handler." >&2
       # Define dummy post_update_to_api if it wasn't sourced
-      if ! command -v post_update_to_api > /dev/null; then
+      if ! command -v post_update_to_api >/dev/null; then
         post_update_to_api() {
           echo "Debug (dummy post_update_to_api): $*" >&2 # Corrected from $@ to $*
         }
       fi
     fi
-  else # curl command itself failed
+  else                      # curl command itself failed
     local curl_exit_code=$? # Capture curl's exit code
     echo "Warning: Failed to download from '$API_FUNC_URL' (curl exit code ${curl_exit_code}) in overridden error_handler." >&2
     # Define dummy post_update_to_api if it wasn't sourced
-    if ! command -v post_update_to_api > /dev/null; then
+    if ! command -v post_update_to_api >/dev/null; then
       post_update_to_api() {
         echo "Debug (dummy post_update_to_api): $*" >&2 # Corrected from $@ to $*
       }
@@ -58,21 +58,21 @@ error_handler() {
   fi
   printf "\e[?25h" # Ensure the cursor is visible in the terminal.
 
-  local exit_code="${?}" # Capture the exit code of the command that triggered the ERR trap.
+  local exit_code="${?}"   # Capture the exit code of the command that triggered the ERR trap.
   local line_number="${1}" # Line number where the error occurred.
   local command="${2}"     # The command that failed.
 
   # Define color codes for error messages, with defaults if not already set by sourced scripts.
   local RD_COLOR="${RD:-$(echo -e "[01;31m")}" # Red
-  local YW_COLOR="${YW:-$(echo -e "[33m")}"   # Yellow
-  local CL_COLOR="${CL:-$(echo -e "[m")}"     # Clear
+  local YW_COLOR="${YW:-$(echo -e "[33m")}"    # Yellow
+  local CL_COLOR="${CL:-$(echo -e "[m")}"      # Clear
 
   # Construct and print the error message to stderr.
   local error_message="${RD_COLOR}[ERROR]${CL_COLOR} in line ${RD_COLOR}${line_number}${CL_COLOR}: exit code ${RD_COLOR}${exit_code}${CL_COLOR}: while executing command ${YW_COLOR}${command}${CL_COLOR}"
   echo -e "\n${error_message}" >&2
 
   # Call post_update_to_api (if available from sourced api.func) to report the failure.
-  if command -v post_update_to_api > /dev/null; then
+  if command -v post_update_to_api >/dev/null; then
     # The condition 'if [[ "$line_number" -eq 50 ]]' seems specific to the original install.func context
     # and might need adjustment if it's not relevant here. For now, it's preserved.
     if [[ "$line_number" -eq 50 ]]; then
@@ -161,7 +161,7 @@ msg_info "Installing Google Chrome"
 # Download Google Chrome GPG key
 wget -q -O - "$GOOGLE_CHROME_GPG_KEY_URL" | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
 # Add Google Chrome repository to sources list
-echo "$GOOGLE_CHROME_REPO_LINE" > /etc/apt/sources.list.d/google-chrome.list
+echo "$GOOGLE_CHROME_REPO_LINE" >/etc/apt/sources.list.d/google-chrome.list
 "$STD" apt-get update
 "$STD" apt-get install -y google-chrome-stable
 msg_ok "Installed Google Chrome"
@@ -354,7 +354,7 @@ msg_ok "Created Update Script"
 
 # --- Finalization ---
 
-motd_ssh # Configure Message of the Day for SSH (sourced function)
+motd_ssh  # Configure Message of the Day for SSH (sourced function)
 customize # Perform further customizations (sourced function)
 
 # Clean up unused packages.
