@@ -2,7 +2,7 @@
 
 A community fork providing Proxmox VE LXC installation scripts for **Byparr** - a self-hosted FlareSolverr alternative built with FastAPI and nodriver.
 
-> **⚠️ Fork Notice**: This is a community fork by ColterD, not yet part of the official [community-scripts](https://github.com/community-scripts/ProxmoxVE) project.
+> **⚠️ Fork Notice**: This is a community fork by ColterD, not yet part of the official [Proxmox VE Helper Scripts](https://github.com/community-scripts/ProxmoxVE) project.
 
 ## Quick Install
 
@@ -26,7 +26,7 @@ Byparr is a drop-in replacement for FlareSolverr that provides reliable captcha 
 
 ## System Requirements
 
-- Proxmox VE 7.0 or higher
+- Proxmox VE 8.1 or higher
 - 2 CPU cores (minimum)
 - 2GB RAM (minimum)
 - 4GB disk space
@@ -96,7 +96,7 @@ pct exec [CONTAINER-ID] /opt/update-byparr.sh
 
 1. Check logs: `journalctl -u byparr -n 50`
 2. Verify Chrome: `google-chrome --version`
-3. Test manually: `cd /opt/byparr && /root/.local/bin/uv run python -m byparr`
+3. Test manually: `cd /opt/byparr && source "$HOME/.cargo/env" && uv run python -m byparr` (This ensures 'uv' is in your PATH for the test).
 
 ### Port Already in Use
 
@@ -117,14 +117,14 @@ ps aux | grep Xvfb
 - **Application**: `/opt/byparr/`
 - **Service**: `/etc/systemd/system/byparr.service`
 - **Update Script**: `/opt/update-byparr.sh`
-- **UV Package Manager**: `/root/.local/bin/uv`
+- **UV Package Manager**: Typically `/root/.local/bin/uv` or `/root/.cargo/bin/uv`. The installer attempts to add it to your PATH; if running `uv` fails, try sourcing `"$HOME/.cargo/env"` or relogging.
 
 ## Credits
 
 - **Byparr**: Created by [@ThePhaseless](https://github.com/ThePhaseless)
 - **Original Script**: [@tanujdargan](https://github.com/tanujdargan)
 - **Fork Maintainer**: [@ColterD](https://github.com/ColterD)
-- **Framework**: [community-scripts](https://github.com/community-scripts/ProxmoxVE)
+- **Framework**: [Proxmox VE Helper Scripts](https://github.com/community-scripts/ProxmoxVE)
 
 ## Contributing
 
@@ -141,5 +141,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **This Fork**: [https://github.com/ColterD/byparr-lxc](https://github.com/ColterD/byparr-lxc)
 - **Byparr**: [https://github.com/ThePhaseless/Byparr](https://github.com/ThePhaseless/Byparr)
-- **Community Scripts**: [https://github.com/community-scripts/ProxmoxVE](https://github.com/community-scripts/ProxmoxVE)
+- **Proxmox VE Helper Scripts**: [https://github.com/community-scripts/ProxmoxVE](https://github.com/community-scripts/ProxmoxVE)
 - **Original PR**: [#2959](https://github.com/community-scripts/ProxmoxVE/pull/2959)

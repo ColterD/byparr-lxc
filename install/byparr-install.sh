@@ -14,6 +14,7 @@ setting_up_container
 network_check
 update_os
 
+# Install essential system dependencies.
 msg_info "Installing Dependencies"
 $STD apt-get install -y \
   curl \
@@ -29,6 +30,7 @@ $STD apt-get install -y \
   lsb-release
 msg_ok "Installed Dependencies"
 
+# Install Python 3.11 and related tools required by Byparr.
 msg_info "Installing Python 3.11"
 $STD apt-get install -y \
   python3.11 \
@@ -38,6 +40,7 @@ $STD apt-get install -y \
   build-essential
 msg_ok "Installed Python 3.11"
 
+# Install Google Chrome, which Byparr uses for browser automation.
 msg_info "Installing Google Chrome"
 wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg
 echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
@@ -45,6 +48,7 @@ $STD apt-get update
 $STD apt-get install -y google-chrome-stable
 msg_ok "Installed Google Chrome"
 
+# Install Xvfb and other display server dependencies for headless browser operation.
 msg_info "Installing Display Server Dependencies"
 $STD apt-get install -y \
   xvfb \
@@ -72,14 +76,15 @@ msg_ok "Installed Display Server Dependencies"
 msg_info "Installing UV Package Manager"
 curl -LsSf https://astral.sh/uv/install.sh | sh
 # shellcheck disable=SC1091
-source /root/.local/bin/env
+# Source cargo environment to bring uv into PATH (uv installer convention)
+source "$HOME/.cargo/env"
 msg_ok "Installed UV Package Manager"
 
 msg_info "Installing Byparr"
 cd /opt || exit
 git clone -q https://github.com/ThePhaseless/Byparr.git byparr
 cd byparr || exit
-/root/.local/bin/uv sync
+uv sync
 msg_ok "Installed Byparr"
 
 msg_info "Creating Service"
@@ -93,13 +98,17 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/byparr
-Environment="PATH=/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PATH=/root/.local/bin:/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
+# Set display for Xvfb
 Environment="DISPLAY=:99"
 Environment="HOME=/root"
 ExecStartPre=/bin/bash -c 'pkill -f "Xvfb :99" || true'
+# Start Xvfb before Byparr
 ExecStartPre=/bin/bash -c 'Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &'
 ExecStartPre=/bin/sleep 2
-ExecStart=/root/.local/bin/uv run python -m byparr
+# Command to run Byparr using uv
+ExecStart=uv run python -m byparr
+# Stop Xvfb when Byparr service stops
 ExecStop=/bin/bash -c 'pkill -f "Xvfb :99" || true'
 Restart=on-failure
 RestartSec=10
@@ -119,7 +128,7 @@ echo "Updating Byparr..."
 systemctl stop byparr
 cd /opt/byparr || exit
 git pull
-/root/.local/bin/uv sync
+uv sync
 systemctl start byparr
 echo "Byparr updated successfully!"
 EOF
