@@ -4,16 +4,25 @@
 # shellcheck disable=SC1090,SC2034
 # SC1090: Can't follow non-constant source - expected for dynamic framework loading
 # SC2034: Variables appear unused - they're used by the sourced framework functions
-BUILD_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func"
-BUILD_FUNC_CONTENT=$(curl -fsSL "$BUILD_FUNC_URL")
-BUILD_FUNC_EXIT_CODE=$?
 
-if [ $BUILD_FUNC_EXIT_CODE -ne 0 ]; then
-  echo "Error: Failed to download build.func from $BUILD_FUNC_URL. Curl exit code: $BUILD_FUNC_EXIT_CODE" >&2
-  exit 1
+# Define the URL for the build.func script from community-scripts
+BUILD_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func"
+
+# Attempt to download build.func
+BUILD_FUNC_CONTENT=$(curl -fsSL "$BUILD_FUNC_URL")
+BUILD_FUNC_EXIT_CODE=$? # Capture curl's exit code immediately
+
+# Check if the download was successful
+if [ "$BUILD_FUNC_EXIT_CODE" -ne 0 ]; then
+  # Print an informative error message to stderr
+  echo "Error: Failed to download build.func from '$BUILD_FUNC_URL'. Curl exit code: $BUILD_FUNC_EXIT_CODE" >&2
+  exit 1 # Exit the script with an error status
 fi
 
+# Source the downloaded build.func content
+# This allows the script to use functions defined in build.func
 source <(echo "$BUILD_FUNC_CONTENT")
+
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)
 # License: MIT
@@ -44,62 +53,74 @@ var_ram="2048"
 var_os="debian"
 var_version="12"
 # These variables are used by the community-scripts framework
-variables
+variables # This function is sourced from build.func
 actual_installer_url="${FORK_REPO_URL}/install/byparr-install.sh"
-color
-catch_errors
+color # This function is sourced from build.func
+catch_errors # This function is sourced from build.func
 
 # This function is an overridden version of 'build_container' from the sourced build.func.
 # It's modified to use a specific installer URL for this forked script.
 build_container() {
-  #  if [ "$VERB" == "yes" ]; then set -x; fi
+  # Uncomment the following line for verbose debugging output
+  # if [ "$VERB" == "yes" ]; then set -x; fi
 
-  if [ "$CT_TYPE" == "1" ]; then
+  # Set container features based on whether it's privileged or unprivileged
+  if [ "$CT_TYPE" == "1" ]; then # Unprivileged container
     FEATURES="keyctl=1,nesting=1"
-  else
+  else # Privileged container
     FEATURES="nesting=1"
   fi
 
+  # Add FUSE support if enabled
   if [ "$ENABLE_FUSE" == "yes" ]; then
     FEATURES="$FEATURES,fuse=1"
   fi
 
-  if [[ $DIAGNOSTICS == "yes" ]]; then
-    post_to_api
+  # Post diagnostics if enabled
+  if [[ "$DIAGNOSTICS" == "yes" ]]; then
+    post_to_api # This function is sourced from build.func
   fi
 
+  # Create a temporary directory for downloads
   TEMP_DIR=$(mktemp -d)
+  # Ensure we return to the original directory and clean up the temp directory on exit
+  # Not using trap here as build.func might have its own trap logic.
+  # Relying on TEMP_DIR cleanup within this function or by the main script's exit handlers (if any).
   pushd "$TEMP_DIR" >/dev/null
+
+  # Download the appropriate installation functions based on the OS
   if [ "$var_os" == "alpine" ]; then
     ALPINE_INSTALL_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func"
     FUNC_CONTENT=$(curl -fsSL "$ALPINE_INSTALL_FUNC_URL")
     FUNC_EXIT_CODE=$?
-    if [ $FUNC_EXIT_CODE -ne 0 ]; then
-      echo "Error: Failed to download alpine-install.func from $ALPINE_INSTALL_FUNC_URL. Curl exit code: $FUNC_EXIT_CODE" >&2
-      exit 1
+    if [ "$FUNC_EXIT_CODE" -ne 0 ]; then
+      echo "Error: Failed to download alpine-install.func from '$ALPINE_INSTALL_FUNC_URL'. Curl exit code: $FUNC_EXIT_CODE" >&2
+      popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
     fi
     export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
-  else
+  else # For Debian, Ubuntu, etc.
     INSTALL_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func"
     FUNC_CONTENT=$(curl -fsSL "$INSTALL_FUNC_URL")
     FUNC_EXIT_CODE=$?
-    if [ $FUNC_EXIT_CODE -ne 0 ]; then
-      echo "Error: Failed to download install.func from $INSTALL_FUNC_URL. Curl exit code: $FUNC_EXIT_CODE" >&2
-      exit 1
+    if [ "$FUNC_EXIT_CODE" -ne 0 ]; then
+      echo "Error: Failed to download install.func from '$INSTALL_FUNC_URL'. Curl exit code: $FUNC_EXIT_CODE" >&2
+      popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
     fi
     export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   fi
+
+  # Export variables required by the sourced install functions and create_lxc.sh
   export RANDOM_UUID="$RANDOM_UUID"
   export CACHER="$APT_CACHER"
   export CACHER_IP="$APT_CACHER_IP"
   export tz="$timezone"
   export DISABLEIPV6="$DISABLEIP6"
   export APPLICATION="$APP"
-  export app="$NSAPP"
+  export app="$NSAPP" # Namespaced application name
   export PASSWORD="$PW"
   export VERBOSE="$VERB"
-  export SSH_ROOT="${SSH}"
-  export SSH_AUTHORIZED_KEY
+  export SSH_ROOT="${SSH}" # Note: ${SSH} is typically 'yes' or 'no', ensure quoting if it could contain spaces
+  export SSH_AUTHORIZED_KEY # This variable would contain the actual key
   export CTID="$CT_ID"
   export CTTYPE="$CT_TYPE"
   export ENABLE_FUSE="$ENABLE_FUSE"
@@ -107,6 +128,7 @@ build_container() {
   export PCT_OSTYPE="$var_os"
   export PCT_OSVERSION="$var_version"
   export PCT_DISK_SIZE="$DISK_SIZE"
+  # Define Proxmox VE container options
   export PCT_OPTIONS="
     -features $FEATURES
     -hostname $HN
@@ -119,21 +141,25 @@ build_container() {
     -memory $RAM_SIZE
     -unprivileged $CT_TYPE
     $PW
-  "
-  # This executes create_lxc.sh and creates the container and .conf file
+  " # Variables like $SD, $NS, $BRG, $MAC, $NET, $GATE, $VLAN, $MTU, $CORE_COUNT, $RAM_SIZE, $PW are set by 'variables' function from build.func
+
+  # Download the create_lxc.sh script
   CREATE_LXC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/create_lxc.sh"
   CREATE_LXC_SCRIPT=$(curl -fsSL "$CREATE_LXC_URL")
   CREATE_LXC_EXIT_CODE=$?
-
-  if [ $CREATE_LXC_EXIT_CODE -ne 0 ]; then
-    echo "Error: Failed to download create_lxc.sh from $CREATE_LXC_URL. Curl exit code: $CREATE_LXC_EXIT_CODE" >&2
-    exit 1
+  if [ "$CREATE_LXC_EXIT_CODE" -ne 0 ]; then
+    echo "Error: Failed to download create_lxc.sh from '$CREATE_LXC_URL'. Curl exit code: $CREATE_LXC_EXIT_CODE" >&2
+    popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
   fi
 
+  # Execute the create_lxc.sh script in a subshell
   bash -c "$CREATE_LXC_SCRIPT"
 
-  LXC_CONFIG=/etc/pve/lxc/${CTID}.conf
-  if [ "$CT_TYPE" == "0" ]; then
+  # Define the path to the LXC configuration file
+  LXC_CONFIG="/etc/pve/lxc/${CTID}.conf" # CTID is the container ID
+
+  # Add USB passthrough settings for privileged containers
+  if [ "$CT_TYPE" == "0" ]; then # Privileged container
     cat <<EOF >>"$LXC_CONFIG"
 # USB passthrough
 lxc.cgroup2.devices.allow: a
@@ -155,9 +181,10 @@ EOF
 
   if [ "$CT_TYPE" == "0" ]; then
     if [[ "$APP" == "Channels" || "$APP" == "Emby" || "$APP" == "ErsatzTV" || "$
-APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry
-pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP
+APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry\
+pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP\
 " == "FileFlows" ]]; then
+      # Add VAAPI hardware transcoding settings for specific applications
       cat <<EOF >>"$LXC_CONFIG"
 # VAAPI hardware transcoding
 lxc.cgroup2.devices.allow: c 226:0 rwm
@@ -165,23 +192,25 @@ lxc.cgroup2.devices.allow: c 226:128 rwm
 lxc.cgroup2.devices.allow: c 29:0 rwm
 lxc.mount.entry: /dev/fb0 dev/fb0 none bind,optional,create=file
 lxc.mount.entry: /dev/dri dev/dri none bind,optional,create=dir
-lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,creat
+lxc.mount.entry: /dev/dri/renderD128 dev/dri/renderD128 none bind,optional,creat\
 e=file
 EOF
     fi
-  else
+  else # Unprivileged container
+    # Check for specific applications that need VAAPI hardware transcoding
     if [[ "$APP" == "Channels" || "$APP" == "Emby" || "$APP" == "ErsatzTV" || "$
-APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry
-pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP
+APP" == "Frigate" || "$APP" == "Jellyfin" || "$APP" == "Plex" || "$APP" == "Scry\
+pted" || "$APP" == "Tdarr" || "$APP" == "Unmanic" || "$APP" == "Ollama" || "$APP\
 " == "FileFlows" ]]; then
+      # Check for the existence of renderD128 and card0/card1
       if [[ -e "/dev/dri/renderD128" ]]; then
-        if [[ -e "/dev/dri/card0" ]]; then
+        if [[ -e "/dev/dri/card0" ]]; then # Prefer card0 if it exists
           cat <<EOF >>"$LXC_CONFIG"
 # VAAPI hardware transcoding
 dev0: /dev/dri/card0,gid=44
 dev1: /dev/dri/renderD128,gid=104
 EOF
-        else
+        else # Fallback to card1 if card0 does not exist
           cat <<EOF >>"$LXC_CONFIG"
 # VAAPI hardware transcoding
 dev0: /dev/dri/card1,gid=44
@@ -192,6 +221,7 @@ EOF
     fi
   fi
 
+  # Enable TUN device passthrough if requested
   if [ "$ENABLE_TUN" == "yes" ]; then
     cat <<EOF >>"$LXC_CONFIG"
 lxc.cgroup2.devices.allow: c 10:200 rwm
@@ -212,57 +242,43 @@ EOF'
     pct exec "$CTID" -- ash -c "apk add bash >/dev/null"
   fi
   # MODIFIED LINE: Use actual_installer_url to fetch the application install script from the fork.
+  # This is a key modification for this forked script.
   INSTALLER_SCRIPT_CONTENT=$(curl -fsSL "${actual_installer_url}")
   INSTALLER_SCRIPT_EXIT_CODE=$?
-
-  if [ $INSTALLER_SCRIPT_EXIT_CODE -ne 0 ]; then
-    echo "Error: Failed to download installer script from ${actual_installer_url}. Curl exit code: $INSTALLER_SCRIPT_EXIT_CODE" >&2
-    exit 1
+  if [ "$INSTALLER_SCRIPT_EXIT_CODE" -ne 0 ]; then
+    echo "Error: Failed to download installer script from '${actual_installer_url}'. Curl exit code: $INSTALLER_SCRIPT_EXIT_CODE" >&2
+    popd >/dev/null; rm -rf "$TEMP_DIR"; exit 1 # Cleanup and exit
   fi
 
+  # Return to the original directory and remove the temporary directory
+  popd >/dev/null
+  rm -rf "$TEMP_DIR"
+
+  # Attach to the container and execute the downloaded installer script
+  # The installer script will perform application-specific setup.
   lxc-attach -n "$CTID" -- bash -c "$INSTALLER_SCRIPT_CONTENT"
 
-}
+} # End of build_container function
 
-function update_script() {
-  if [[ ! -d /opt/byparr ]]; then
-    msg_error "No ${APP} Installation Found!"
-    exit
-  fi
-  header_info
-  echo -e "\n ⚠️  Updating ColterD Fork of Byparr\n"
-  
-  if [[ -x /opt/byparr/update-byparr.sh ]]; then
-    msg_info "Running ${APP} update script"
-    /opt/byparr/update-byparr.sh
-    msg_ok "Updated Successfully"
-  else
-    msg_error "Update script not found"
-    msg_info "Attempting manual update"
-    cd /opt/byparr || exit
-    systemctl stop byparr
-    git pull origin main
-    /root/.local/bin/uv sync
-    systemctl start byparr
-    msg_ok "Manual update completed"
-  fi
-  exit
-}
+# Main script execution starts here
+start # This function is sourced from build.func, likely handles initial setup and user prompts
+build_container # Call our overridden build_container function
+description # This function is sourced from build.func, likely displays summary information
 
-start
-build_container # Called from start
-description
-
+# Final permission settings for the container
 msg_info "Setting Container Permissions"
-if [[ -n "${CT_ID:-}" ]]; then
-  # Set container features for browser automation
+if [[ -n "${CT_ID:-}" ]]; then # Check if CT_ID is set and not empty
+  # Set container features for browser automation (nesting and FUSE)
   pct set "$CT_ID" -features nesting=1,fuse=1
 fi
 msg_ok "Set Container Permissions"
 
+# Final success message
 msg_ok "Completed Successfully!\n"
+# Display information about the application and how to access it
 echo -e "${APP} FlareSolverr Alternative by ThePhaseless
 Proxmox Script by ColterD (Fork of tanujdargan's work)
 
 ${APP} should be reachable at ${BL}http://${IP}:8191${CL}
 Use this URL in your *arr applications as the FlareSolverr URL\n"
+# Variables like ${BL}, ${CL}, ${IP} are likely set by sourced scripts (build.func or its dependencies)
