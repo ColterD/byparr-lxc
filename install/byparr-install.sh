@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+declare SPINNER_PID=""
 
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)  
@@ -30,18 +31,10 @@ error_handler() {
     fi
   fi
 
-  # Robustly kill spinner, especially with set -u active:
-  (
-    set +u # Temporarily disable exit-on-unset-variable for this subshell
-    local current_spinner_pid_in_subshell="$SPINNER_PID" # Assign safely within subshell
-    if [ -n "$current_spinner_pid_in_subshell" ]; then
-        if ps -p "$current_spinner_pid_in_subshell" >/dev/null 2>&1; then # Check if process exists
-            kill "$current_spinner_pid_in_subshell" >/dev/null 2>&1
-        fi
-    fi
-  )
-  # The subshell ensures 'set +u' doesn't affect the rest of the error_handler or script.
-  # SPINNER_PID itself is not modified globally by this.
+  # Robustly kill spinner (SPINNER_PID is now globally declared):
+  if [ -n "${SPINNER_PID:-}" ] && ps -p "${SPINNER_PID:-}" >/dev/null 2>&1; then
+    kill "${SPINNER_PID:-}" >/dev/null 2>&1
+  fi
   printf "\e[?25h" # Ensure cursor is visible
 
   local exit_code="$?" # Should be the exit code of the command that triggered ERR trap
@@ -133,7 +126,7 @@ $STD apt-get install -y \
 msg_ok "Installed Display Server Dependencies"
 
 msg_info "Installing UV Package Manager"
-curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 # shellcheck disable=SC1091
 # Source uv environment to bring uv into PATH
 UV_ENV_PATH="$HOME/.local/bin/env"
