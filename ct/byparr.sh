@@ -4,7 +4,16 @@
 # shellcheck disable=SC1090,SC2034
 # SC1090: Can't follow non-constant source - expected for dynamic framework loading
 # SC2034: Variables appear unused - they're used by the sourced framework functions
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
+BUILD_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func"
+BUILD_FUNC_CONTENT=$(curl -fsSL "$BUILD_FUNC_URL")
+BUILD_FUNC_EXIT_CODE=$?
+
+if [ $BUILD_FUNC_EXIT_CODE -ne 0 ]; then
+  echo "Error: Failed to download build.func from $BUILD_FUNC_URL. Curl exit code: $BUILD_FUNC_EXIT_CODE" >&2
+  exit 1
+fi
+
+source <(echo "$BUILD_FUNC_CONTENT")
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)
 # License: MIT
@@ -62,11 +71,23 @@ build_container() {
   TEMP_DIR=$(mktemp -d)
   pushd "$TEMP_DIR" >/dev/null
   if [ "$var_os" == "alpine" ]; then
-    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/c
-ommunity-scripts/ProxmoxVE/main/misc/alpine-install.func)"
+    ALPINE_INSTALL_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/alpine-install.func"
+    FUNC_CONTENT=$(curl -fsSL "$ALPINE_INSTALL_FUNC_URL")
+    FUNC_EXIT_CODE=$?
+    if [ $FUNC_EXIT_CODE -ne 0 ]; then
+      echo "Error: Failed to download alpine-install.func from $ALPINE_INSTALL_FUNC_URL. Curl exit code: $FUNC_EXIT_CODE" >&2
+      exit 1
+    fi
+    export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   else
-    export FUNCTIONS_FILE_PATH="$(curl -fsSL https://raw.githubusercontent.com/c
-ommunity-scripts/ProxmoxVE/main/misc/install.func)"
+    INSTALL_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/install.func"
+    FUNC_CONTENT=$(curl -fsSL "$INSTALL_FUNC_URL")
+    FUNC_EXIT_CODE=$?
+    if [ $FUNC_EXIT_CODE -ne 0 ]; then
+      echo "Error: Failed to download install.func from $INSTALL_FUNC_URL. Curl exit code: $FUNC_EXIT_CODE" >&2
+      exit 1
+    fi
+    export FUNCTIONS_FILE_PATH="$FUNC_CONTENT"
   fi
   export RANDOM_UUID="$RANDOM_UUID"
   export CACHER="$APT_CACHER"
@@ -100,8 +121,16 @@ ommunity-scripts/ProxmoxVE/main/misc/install.func)"
     $PW
   "
   # This executes create_lxc.sh and creates the container and .conf file
-  bash -c "$(curl -fsSL https://raw.githubusercontent.com/community-scripts/Prox
-moxVE/main/ct/create_lxc.sh)" $?
+  CREATE_LXC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/ct/create_lxc.sh"
+  CREATE_LXC_SCRIPT=$(curl -fsSL "$CREATE_LXC_URL")
+  CREATE_LXC_EXIT_CODE=$?
+
+  if [ $CREATE_LXC_EXIT_CODE -ne 0 ]; then
+    echo "Error: Failed to download create_lxc.sh from $CREATE_LXC_URL. Curl exit code: $CREATE_LXC_EXIT_CODE" >&2
+    exit 1
+  fi
+
+  bash -c "$CREATE_LXC_SCRIPT"
 
   LXC_CONFIG=/etc/pve/lxc/${CTID}.conf
   if [ "$CT_TYPE" == "0" ]; then
@@ -183,7 +212,15 @@ EOF'
     pct exec "$CTID" -- ash -c "apk add bash >/dev/null"
   fi
   # MODIFIED LINE: Use actual_installer_url to fetch the application install script from the fork.
-  lxc-attach -n "$CTID" -- bash -c "$(curl -fsSL ${actual_installer_url})" $?
+  INSTALLER_SCRIPT_CONTENT=$(curl -fsSL "${actual_installer_url}")
+  INSTALLER_SCRIPT_EXIT_CODE=$?
+
+  if [ $INSTALLER_SCRIPT_EXIT_CODE -ne 0 ]; then
+    echo "Error: Failed to download installer script from ${actual_installer_url}. Curl exit code: $INSTALLER_SCRIPT_EXIT_CODE" >&2
+    exit 1
+  fi
+
+  lxc-attach -n "$CTID" -- bash -c "$INSTALLER_SCRIPT_CONTENT"
 
 }
 
