@@ -59,6 +59,13 @@ $error_message" >&2 # Ensure error messages go to stderr
   fi
   exit "$exit_code" # Exit with the original command's exit code
 }
+# Explicitly reset the ERR trap to use our redefined error_handler.
+# This is crucial because the original install.func's catch_errors() might have
+# already set a trap to its own (potentially problematic) error_handler.
+# Our redefined error_handler is above, and catch_errors (from sourced script)
+# which enables 'set -e' and the trap mechanism is called further below.
+# By setting it here, we ensure our handler is used by the trap enabled by catch_errors.
+trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 color
 verb_ip6
 catch_errors
