@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-declare SPINNER_PID=""
+declare -g SPINNER_PID=""
+export SPINNER_PID
 
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)  
