@@ -221,11 +221,8 @@ rm -f "$UV_INSTALL_SCRIPT" # Clean up the temporary file after successful execut
 # And `uv` is installed there.
 # shellcheck disable=SC1091 # File may not exist in CI environment
 if [ -f "$HOME/.cargo/env" ]; then
-  # shellcheck disable=SC1091 # File may not exist in CI environment
   source "$HOME/.cargo/env"
-# shellcheck disable=SC1091 # File may not exist in CI environment
 elif [ -f "$HOME/.local/bin/env" ]; then # Fallback to the previous path if cargo/env is not found
-  # shellcheck disable=SC1091 # File may not exist in CI environment
   source "$HOME/.local/bin/env"
 else
   # If 'uv' is expected to be directly in PATH after install (e.g. /usr/local/bin or $HOME/.local/bin)
