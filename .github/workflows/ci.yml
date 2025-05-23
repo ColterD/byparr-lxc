@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ] # Assuming 'main' is your default branch
+  pull_request:
+    branches: [ main ] # Assuming 'main' is your default branch
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: './'
+          # You can add exclude paths here if needed, e.g.:
+          # exclude: './.github/'
+        # Environment variables can be set for shellcheck if needed
+        # env:
+        #   SHELLCHECK_OPTS: -x
+
+      - name: Check formatting with shfmt
+        run: |
+          echo "Installing shfmt..."
+          sudo apt-get update -y
+          sudo apt-get install -y shfmt
+          echo "Running shfmt check..."
+          # List files that differ from shfmt's formatting style.
+          # -i 2: Indent with 2 spaces.
+          # -ci: Indent switch cases.
+          # -l: List files that would be changed.
+          # We check if the output of 'shfmt -l' is non-empty.
+          badly_formatted_files=$(shfmt -i 2 -ci -l .)
+          if [ -n "$badly_formatted_files" ]; then
+            echo "ERROR: The following files are not formatted correctly with shfmt:"
+            echo "$badly_formatted_files"
+            echo "Please run 'shfmt -i 2 -ci -w .' on these files to format them."
+            exit 1
+          else
+            echo "All shell scripts are correctly formatted according to shfmt."
+          fi
