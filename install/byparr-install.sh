@@ -63,9 +63,9 @@ error_handler() {
   local command="${2}"     # The command that failed.
 
   # Define color codes for error messages, with defaults if not already set by sourced scripts.
-  local RD_COLOR="${RD:-$(echo -e "[01;31m")}" # Red
-  local YW_COLOR="${YW:-$(echo -e "[33m")}"   # Yellow
-  local CL_COLOR="${CL:-$(echo -e "[m")}"     # Clear
+  local RD_COLOR="${RD:-$(echo -e "[01;31m")}" # Red
+  local YW_COLOR="${YW:-$(echo -e "[33m")}"   # Yellow
+  local CL_COLOR="${CL:-$(echo -e "[m")}"     # Clear
 
   # Construct and print the error message to stderr.
   local error_message="${RD_COLOR}[ERROR]${CL_COLOR} in line ${RD_COLOR}${line_number}${CL_COLOR}: exit code ${RD_COLOR}${exit_code}${CL_COLOR}: while executing command ${YW_COLOR}${command}${CL_COLOR}"
@@ -289,27 +289,27 @@ msg_info "Creating systemd Service File for Byparr"
 cat <<EOF >"/etc/systemd/system/byparr.service"
 [Unit]
 Description=Byparr - FlareSolverr Alternative
-Documentation=${BYPARR_GIT_URL} # Use variable for documentation URL
-After=network.target # Ensure network is up before starting
+Documentation=${BYPARR_GIT_URL}
+After=network.target
 
 [Service]
-Type=simple # Simple service type
-User=root # Run as root (consider a dedicated user for improved security if possible)
-WorkingDirectory=/opt/byparr # Set working directory for Byparr
+Type=simple
+User=root
+WorkingDirectory=/opt/byparr
 
 # Environment variables for the Byparr process
 Environment="PATH=/root/.local/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-Environment="DISPLAY=:99" # For Xvfb
-Environment="HOME=/root"  # Define HOME directory, useful for some tools
+Environment="DISPLAY=:99"
+Environment="HOME=/root"
 
 # Command to start Byparr using the wrapper script
 ExecStart=/opt/byparr/run_byparr_with_xvfb.sh
 
-Restart=on-failure # Restart the service if it fails
-RestartSec=10      # Delay before restarting
+Restart=on-failure
+RestartSec=10
 
 [Install]
-WantedBy=multi-user.target # Standard target for multi-user services
+WantedBy=multi-user.target
 EOF
 
 # Enable and start the Byparr service immediately.
