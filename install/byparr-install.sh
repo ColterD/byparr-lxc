@@ -30,13 +30,18 @@ error_handler() {
     fi
   fi
 
-  # Robustly kill spinner:
-  local current_spinner_pid="${SPINNER_PID:-}" # Safely get the value, defaulting to empty if unset
-  if [ -n "$current_spinner_pid" ]; then     # Check if it's not empty
-      if ps -p "$current_spinner_pid" >/dev/null 2>&1; then # Check if process exists
-          kill "$current_spinner_pid" >/dev/null 2>&1
-      fi
-  fi
+  # Robustly kill spinner, especially with set -u active:
+  (
+    set +u # Temporarily disable exit-on-unset-variable for this subshell
+    local current_spinner_pid_in_subshell="$SPINNER_PID" # Assign safely within subshell
+    if [ -n "$current_spinner_pid_in_subshell" ]; then
+        if ps -p "$current_spinner_pid_in_subshell" >/dev/null 2>&1; then # Check if process exists
+            kill "$current_spinner_pid_in_subshell" >/dev/null 2>&1
+        fi
+    fi
+  )
+  # The subshell ensures 'set +u' doesn't affect the rest of the error_handler or script.
+  # SPINNER_PID itself is not modified globally by this.
   printf "\e[?25h" # Ensure cursor is visible
 
   local exit_code="$?" # Should be the exit code of the command that triggered ERR trap
