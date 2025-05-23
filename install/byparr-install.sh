@@ -5,12 +5,8 @@
 # License: MIT
 # https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
 
-# Source functions if provided
-if [[ -n "${FUNCTIONS_FILE_PATH:-}" ]]; then
-  source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
-fi
-
-# Set up environment
+# shellcheck disable=SC1091
+source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
 color
 verb_ip6
 catch_errors
@@ -75,13 +71,14 @@ msg_ok "Installed Display Server Dependencies"
 
 msg_info "Installing UV Package Manager"
 curl -LsSf https://astral.sh/uv/install.sh | sh
+# shellcheck disable=SC1091
 source /root/.local/bin/env
 msg_ok "Installed UV Package Manager"
 
 msg_info "Installing Byparr"
-cd /opt
+cd /opt || exit
 git clone -q https://github.com/ThePhaseless/Byparr.git byparr
-cd byparr
+cd byparr || exit
 /root/.local/bin/uv sync
 msg_ok "Installed Byparr"
 
@@ -120,7 +117,7 @@ cat <<'EOF' >/opt/update-byparr.sh
 set -e
 echo "Updating Byparr..."
 systemctl stop byparr
-cd /opt/byparr
+cd /opt/byparr || exit
 git pull
 /root/.local/bin/uv sync
 systemctl start byparr
