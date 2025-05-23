@@ -24,19 +24,29 @@ API_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main
 # Override error_handler from the sourced install.func to make SPINNER_PID handling more robust with set -u
 # This custom error handler ensures that any running spinner process is killed before exiting.
 error_handler() {
-  # Attempt to source api.func for enhanced error reporting, but proceed if it fails.
-  # This minimizes new failure points if api.func (from community-scripts) is unavailable.
   local api_func_content
-  api_func_content=$(curl -fsSL "$API_FUNC_URL")
-  if [ $? -eq 0 ] && [ -n "$api_func_content" ]; then
-    source <(echo "$api_func_content")
-  else
-    # Log a warning if api.func cannot be sourced.
-    echo "Warning: Failed to download or source '$API_FUNC_URL' in overridden error_handler." >&2
-    # Define a dummy post_update_to_api if it's not available, to prevent errors later if called.
+  # Attempt to download API function content
+  if api_func_content=$(curl -fsSL "$API_FUNC_URL"); then
+    # Check if downloaded content is non-empty
+    if [ -n "$api_func_content" ]; then
+      # shellcheck disable=SC1090 # Can't follow non-constant source
+      source <(echo "$api_func_content")
+    else
+      echo "Warning: Downloaded empty content from '$API_FUNC_URL' in overridden error_handler." >&2
+      # Define dummy post_update_to_api if it wasn't sourced
+      if ! command -v post_update_to_api > /dev/null; then
+        post_update_to_api() {
+          echo "Debug (dummy post_update_to_api): $*" >&2 # Corrected from $@ to $*
+        }
+      fi
+    fi
+  else # curl command itself failed
+    local curl_exit_code=$? # Capture curl's exit code
+    echo "Warning: Failed to download from '$API_FUNC_URL' (curl exit code ${curl_exit_code}) in overridden error_handler." >&2
+    # Define dummy post_update_to_api if it wasn't sourced
     if ! command -v post_update_to_api > /dev/null; then
       post_update_to_api() {
-        echo "Debug (dummy post_update_to_api): $@" >&2
+        echo "Debug (dummy post_update_to_api): $*" >&2 # Corrected from $@ to $*
       }
     fi
   fi
@@ -209,9 +219,13 @@ rm -f "$UV_INSTALL_SCRIPT" # Clean up the temporary file after successful execut
 # Let's assume that `sh uv_install_script` adds `uv` to the path or we can source its env.
 # Typically, Astral's installer will instruct to add `~/.cargo/bin` to PATH.
 # And `uv` is installed there.
+# shellcheck disable=SC1091 # File may not exist in CI environment
 if [ -f "$HOME/.cargo/env" ]; then
+  # shellcheck disable=SC1091 # File may not exist in CI environment
   source "$HOME/.cargo/env"
+# shellcheck disable=SC1091 # File may not exist in CI environment
 elif [ -f "$HOME/.local/bin/env" ]; then # Fallback to the previous path if cargo/env is not found
+  # shellcheck disable=SC1091 # File may not exist in CI environment
   source "$HOME/.local/bin/env"
 else
   # If 'uv' is expected to be directly in PATH after install (e.g. /usr/local/bin or $HOME/.local/bin)
