@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC1090,SC2034
+# SC1090: Can't follow non-constant source - expected for dynamic framework loading
+# SC2034: Variables appear unused - they're used by the sourced framework functions
 source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)
@@ -28,11 +31,14 @@ var_cpu="2"
 var_ram="2048"
 var_os="debian"
 var_version="12"
+var_install="${FORK_REPO:-https://raw.githubusercontent.com/ColterD/byparr-lxc/main}/install/byparr-install.sh"
+# These variables are used by the community-scripts framework
 variables
 color
 catch_errors
 
 function default_settings() {
+  # All these variables are used by the framework's build_container function
   CT_TYPE="1"
   PW=""
   CT_ID=$NEXTID
@@ -71,7 +77,7 @@ function update_script() {
   else
     msg_error "Update script not found"
     msg_info "Attempting manual update"
-    cd /opt/byparr
+    cd /opt/byparr || exit
     systemctl stop byparr
     git pull origin main
     /root/.local/bin/uv sync
@@ -86,9 +92,9 @@ build_container
 description
 
 msg_info "Setting Container Permissions"
-if [[ -n "$CT_ID" ]]; then
+if [[ -n "${CT_ID:-}" ]]; then
   # Set container features for browser automation
-  pct set $CT_ID -features nesting=1,fuse=1
+  pct set "$CT_ID" -features nesting=1,fuse=1
 fi
 msg_ok "Set Container Permissions"
 
