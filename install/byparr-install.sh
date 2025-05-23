@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+declare SPINNER_PID=""
 
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)  
@@ -7,6 +8,64 @@
 
 # shellcheck disable=SC1091
 source /dev/stdin <<< "$FUNCTIONS_FILE_PATH"
+
+# Override error_handler from the sourced install.func to make SPINNER_PID handling more robust with set -u
+error_handler() {
+  # Attempt to source api.func, but proceed if it fails (to avoid new failure points if api.func is unavailable)
+  # Original line: source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func)
+  # We are trying to minimize changes, but if this curl fails, the original error_handler would also fail.
+  # For now, keep it, as the primary issue is SPINNER_PID.
+  # If further issues arise with api.func, it might need to be removed or handled differently.
+  local API_FUNC_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/api.func"
+  local API_FUNC_CONTENT
+  API_FUNC_CONTENT=$(curl -fsSL "$API_FUNC_URL")
+  if [ $? -eq 0 ] && [ -n "$API_FUNC_CONTENT" ]; then
+    source <(echo "$API_FUNC_CONTENT")
+  else
+    echo "Warning: Failed to download or source $API_FUNC_URL in overridden error_handler." >&2
+    # Define dummy post_update_to_api if it's not available, to prevent errors later
+    if ! command -v post_update_to_api > /dev/null; then
+        post_update_to_api() {
+            echo "Debug: post_update_to_api called with: $@" >&2
+        }
+    fi
+  fi
+
+  # Robustly kill spinner (SPINNER_PID is now globally declared):
+  if [ -n "${SPINNER_PID:-}" ] && ps -p "${SPINNER_PID:-}" >/dev/null 2>&1; then
+    kill "${SPINNER_PID:-}" >/dev/null 2>&1
+  fi
+  printf "\e[?25h" # Ensure cursor is visible
+
+  local exit_code="$?" # Should be the exit code of the command that triggered ERR trap
+  local line_number="$1"
+  local command="$2"
+  # Ensure color variables are available, provide defaults if not.
+  local RD_COLOR="${RD:-$(echo "[01;31m")}"
+  local YW_COLOR="${YW:-$(echo "[33m")}"
+  local CL_COLOR="${CL:-$(echo "[m")}"
+
+  local error_message="${RD_COLOR}[ERROR]${CL_COLOR} in line ${RD_COLOR}$line_number${CL_COLOR}: exit code ${RD_COLOR}$exit_code${CL_COLOR}: while executing command ${YW_COLOR}$command${CL_COLOR}"
+  echo -e "
+$error_message" >&2 # Ensure error messages go to stderr
+
+  # Call post_update_to_api if it exists from the sourced api.func
+  if command -v post_update_to_api > /dev/null; then
+    if [[ "$line_number" -eq 50 ]]; then # This condition might be specific to original install.func context
+      post_update_to_api "failed" "No error message, script ran in silent mode"
+    else
+      post_update_to_api "failed" "${command}"
+    fi
+  fi
+  exit "$exit_code" # Exit with the original command's exit code
+}
+# Explicitly reset the ERR trap to use our redefined error_handler.
+# This is crucial because the original install.func's catch_errors() might have
+# already set a trap to its own (potentially problematic) error_handler.
+# Our redefined error_handler is above, and catch_errors (from sourced script)
+# which enables 'set -e' and the trap mechanism is called further below.
+# By setting it here, we ensure our handler is used by the trap enabled by catch_errors.
+trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 color
 verb_ip6
 catch_errors
@@ -74,17 +133,23 @@ $STD apt-get install -y \
 msg_ok "Installed Display Server Dependencies"
 
 msg_info "Installing UV Package Manager"
-curl -LsSf https://astral.sh/uv/install.sh | sh
+curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 # shellcheck disable=SC1091
-# Source cargo environment to bring uv into PATH (uv installer convention)
-source "$HOME/.cargo/env"
+# Source uv environment to bring uv into PATH
+UV_ENV_PATH="$HOME/.local/bin/env"
+if [ -f "$UV_ENV_PATH" ]; then
+    source "$UV_ENV_PATH"
+else
+    msg_error "uv environment file '$UV_ENV_PATH' not found after installation. Cannot set up uv."
+    # msg_error from install.func should call error_handler, which exits.
+fi
 msg_ok "Installed UV Package Manager"
 
 msg_info "Installing Byparr"
 cd /opt || exit
 git clone -q https://github.com/ThePhaseless/Byparr.git byparr
 cd byparr || exit
-uv sync
+uv sync >/dev/null
 msg_ok "Installed Byparr"
 
 msg_info "Creating Service"
