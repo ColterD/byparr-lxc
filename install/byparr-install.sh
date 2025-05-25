@@ -71,6 +71,48 @@ error_handler() {
   local error_message="${RD_COLOR}[ERROR]${CL_COLOR} in line ${RD_COLOR}${line_number}${CL_COLOR}: exit code ${RD_COLOR}${exit_code}${CL_COLOR}: while executing command ${YW_COLOR}${command}${CL_COLOR}"
   echo -e "\n${error_message}" >&2
 
+  # Perform cleanup operations
+  echo -e "\n${YW_COLOR}[CLEANUP]${CL_COLOR} Performing cleanup operations..." >&2
+  
+  # Stop the Byparr service if it exists and is running
+  if systemctl is-active --quiet byparr 2>/dev/null; then
+    echo "Stopping Byparr service..." >&2
+    systemctl stop byparr 2>/dev/null || true
+  fi
+  
+  # Remove systemd service file if it exists
+  if [ -f "/etc/systemd/system/byparr.service" ]; then
+    echo "Removing systemd service file..." >&2
+    rm -f "/etc/systemd/system/byparr.service" 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+  fi
+  
+  # Create a failure report
+  FAILURE_REPORT="/root/byparr-install-failure-$(date '+%Y%m%d%H%M%S').log"
+  echo "Creating failure report at $FAILURE_REPORT..." >&2
+  {
+    echo "Byparr Installation Failure Report"
+    echo "=================================="
+    echo "Date: $(date)"
+    echo "Error in line: $line_number"
+    echo "Command: $command"
+    echo "Exit code: $exit_code"
+    echo ""
+    echo "System Information:"
+    echo "------------------"
+    echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+    echo "Kernel: $(uname -r)"
+    echo "CPU: $(grep "model name" /proc/cpuinfo | head -n1 | cut -d: -f2 | sed 's/^[ \t]*//')"
+    echo "Memory: $(free -h | awk '/^Mem:/ {print $2}')"
+    echo "Disk: $(df -h /opt | awk 'NR==2 {print $2}')"
+    echo ""
+    echo "Last 20 lines of journalctl:"
+    journalctl -n 20 --no-pager
+  } > "$FAILURE_REPORT" 2>&1 || true
+  
+  echo -e "${YW_COLOR}[INFO]${CL_COLOR} A failure report has been created at: ${FAILURE_REPORT}" >&2
+  echo -e "${YW_COLOR}[INFO]${CL_COLOR} Please include this file when seeking help." >&2
+
   # Call post_update_to_api (if available from sourced api.func) to report the failure.
   if command -v post_update_to_api >/dev/null; then
     # The condition 'if [[ "$line_number" -eq 50 ]]' seems specific to the original install.func context
@@ -81,6 +123,10 @@ error_handler() {
       post_update_to_api "failed" "${command}" # Report the failed command.
     fi
   fi
+  
+  echo -e "\n${RD_COLOR}[INSTALLATION FAILED]${CL_COLOR} Please check the error message above and the failure report." >&2
+  echo -e "If you need help, visit: ${YW_COLOR}https://github.com/ThePhaseless/Byparr/issues${CL_COLOR}" >&2
+  
   exit "${exit_code}" # Exit the script with the original command's exit code.
 }
 
@@ -119,9 +165,85 @@ catch_errors # Set up initial error catching (e.g., 'set -e') (sourced).
 # Our redefined error_handler is above.
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
 
+# --- System Requirements Validation ---
+msg_info "Validating system requirements"
+
+# Check CPU cores
+CPU_CORES=$(nproc)
+if [ "$CPU_CORES" -lt 2 ]; then
+  msg_warning "Only $CPU_CORES CPU core(s) detected. Byparr recommends at least 2 cores."
+  echo "Performance may be degraded with fewer than 2 CPU cores."
+  sleep 2
+else
+  msg_ok "CPU cores: $CPU_CORES (meets minimum requirement of 2)"
+fi
+
+# Check available memory
+TOTAL_MEM=$(free -m | awk '/^Mem:/{print $2}')
+if [ "$TOTAL_MEM" -lt 2048 ]; then
+  msg_warning "Only $TOTAL_MEM MB RAM detected. Byparr recommends at least 2048 MB."
+  echo "Performance may be degraded with less than 2048 MB RAM."
+  sleep 2
+else
+  msg_ok "Memory: $TOTAL_MEM MB (meets minimum requirement of 2048 MB)"
+fi
+
+# Check available disk space
+DISK_SPACE=$(df -m /opt | awk 'NR==2 {print $4}')
+if [ "$DISK_SPACE" -lt 4096 ]; then
+  msg_warning "Only $DISK_SPACE MB free disk space detected in /opt. Byparr recommends at least 4096 MB."
+  echo "You may run out of disk space during installation or operation."
+  sleep 2
+else
+  msg_ok "Disk space: $DISK_SPACE MB available (meets minimum requirement of 4096 MB)"
+fi
+
+msg_ok "System requirements validation completed"
+
 # --- Container Setup ---
 setting_up_container # Perform initial container setup steps (sourced).
 network_check        # Check network connectivity (sourced).
+
+# --- External Resource Connectivity Test ---
+msg_info "Testing connectivity to external resources"
+
+# Function to test connectivity to a URL
+test_connectivity() {
+  local url="$1"
+  local description="$2"
+  local max_retries=3
+  local retry_count=0
+  local success=false
+  
+  while [ $retry_count -lt $max_retries ] && [ "$success" != "true" ]; do
+    if curl -s --head --connect-timeout 10 "$url" >/dev/null; then
+      msg_ok "Connection to $description ($url) successful"
+      success=true
+    else
+      retry_count=$((retry_count + 1))
+      if [ $retry_count -lt $max_retries ]; then
+        msg_warning "Connection to $description failed, retrying ($retry_count/$max_retries)..."
+        sleep 2
+      else
+        msg_warning "Connection to $description ($url) failed after $max_retries attempts"
+        echo "Installation may fail if this resource is unavailable."
+        sleep 2
+        return 1
+      fi
+    fi
+  done
+  
+  return 0
+}
+
+# Test connectivity to all required external resources
+test_connectivity "https://github.com" "GitHub (for Byparr repository)"
+test_connectivity "https://dl.google.com" "Google Chrome repository"
+test_connectivity "https://astral.sh" "Astral (for UV package manager)"
+test_connectivity "https://raw.githubusercontent.com" "GitHub Raw Content"
+
+msg_ok "External resource connectivity test completed"
+
 update_os            # Update the operating system (sourced).
 
 # --- Dependency Installation ---
@@ -193,47 +315,85 @@ msg_ok "Installed Xvfb (Display Server Dependencies)"
 
 # Install UV Package Manager from Astral
 msg_info "Installing UV Package Manager"
-UV_INSTALL_SCRIPT=$(mktemp) # Create a temporary file for the installer script
-# Download the uv installation script
-if curl -LsSf "$ASTRAL_UV_INSTALL_URL" -o "$UV_INSTALL_SCRIPT"; then
-  # Execute the downloaded script
-  sh "$UV_INSTALL_SCRIPT" >/dev/null 2>&1
-else
-  # If curl fails to download the script
-  rm -f "$UV_INSTALL_SCRIPT" # Clean up the temporary file
-  msg_error "Failed to download uv installation script from '$ASTRAL_UV_INSTALL_URL'."
-  # error_handler will be called due to 'set -e' or explicit trap, causing script exit.
-fi
-rm -f "$UV_INSTALL_SCRIPT" # Clean up the temporary file after successful execution
 
-# Source the uv environment script to bring 'uv' into the current shell's PATH.
-# This is necessary because 'uv' is installed in a user-local directory.
-# shellcheck disable=SC1090 # ShellCheck can't follow non-literal source.
-# The path $HOME/.local/bin/env might change depending on uv's installation script.
-# Using $HOME/.cargo/env as uv is written in Rust and installed via similar mechanisms to cargo tools.
-# Astral's official docs use `source $HOME/.cargo/env` or similar.
-# Let's assume uv creates a similar env file or adds itself to a standard user bin path.
-# A more robust way would be to find 'uv' in likely paths if this direct source fails.
-# For now, sticking to the previous logic of sourcing an env file.
-# The original script used "$HOME/.local/bin/env". If "uv" is directly in "$HOME/.local/bin", that's simpler.
-# Let's assume that `sh uv_install_script` adds `uv` to the path or we can source its env.
-# Typically, Astral's installer will instruct to add `~/.cargo/bin` to PATH.
-# And `uv` is installed there.
-# shellcheck disable=SC1091 # File may not exist in CI environment
-if [ -f "$HOME/.cargo/env" ]; then
-  source "$HOME/.cargo/env"
-elif [ -f "$HOME/.local/bin/env" ]; then # Fallback to the previous path if cargo/env is not found
-  source "$HOME/.local/bin/env"
+# Function to find and set up UV in PATH
+setup_uv_path() {
+  # Add all possible UV locations to PATH
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
+  
+  # Source cargo environment if available
+  if [ -f "$HOME/.cargo/env" ]; then
+    # shellcheck disable=SC1091
+    source "$HOME/.cargo/env"
+  fi
+  
+  # Verify UV is in PATH
+  if command -v uv >/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+# Try to find UV first in case it's already installed
+if setup_uv_path && command -v uv >/dev/null; then
+  msg_info "UV Package Manager already installed, skipping installation"
 else
-  # If 'uv' is expected to be directly in PATH after install (e.g. /usr/local/bin or $HOME/.local/bin)
-  # then sourcing an env file might not be needed.
-  # However, to be safe and ensure 'uv' command is found:
-  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  # Create a temporary file for the installer script
+  UV_INSTALL_SCRIPT=$(mktemp)
+  
+  # Download the UV installation script with retry mechanism
+  MAX_RETRIES=3
+  RETRY_COUNT=0
+  DOWNLOAD_SUCCESS=false
+  
+  while [ $RETRY_COUNT -lt $MAX_RETRIES ] && [ "$DOWNLOAD_SUCCESS" != "true" ]; do
+    if [ $RETRY_COUNT -gt 0 ]; then
+      msg_info "Retry attempt $RETRY_COUNT for downloading UV installer..."
+      sleep 2
+    fi
+    
+    if curl -LsSf "$ASTRAL_UV_INSTALL_URL" -o "$UV_INSTALL_SCRIPT"; then
+      DOWNLOAD_SUCCESS=true
+    else
+      RETRY_COUNT=$((RETRY_COUNT + 1))
+    fi
+  done
+  
+  # Check if download was successful
+  if [ "$DOWNLOAD_SUCCESS" != "true" ]; then
+    rm -f "$UV_INSTALL_SCRIPT"
+    msg_error "Failed to download UV installation script after $MAX_RETRIES attempts."
+    exit 1
+  fi
+  
+  # Execute the downloaded script
+  msg_info "Running UV installer..."
+  sh "$UV_INSTALL_SCRIPT"
+  INSTALL_RESULT=$?
+  
+  # Clean up the temporary file
+  rm -f "$UV_INSTALL_SCRIPT"
+  
+  # Check installation result
+  if [ $INSTALL_RESULT -ne 0 ]; then
+    msg_error "UV installation failed with exit code $INSTALL_RESULT"
+    exit 1
+  fi
+  
+  # Set up UV path after installation
+  setup_uv_path
+  
+  # Final verification
   if ! command -v uv >/dev/null; then
-    msg_error "uv command not found after installation and PATH adjustment. Please check Astral's installation guide."
+    msg_error "UV command not found after installation. Installation may have failed."
+    exit 1
   fi
 fi
-msg_ok "Installed UV Package Manager"
+
+# Display UV version for verification
+UV_VERSION=$(uv --version 2>/dev/null || echo "Unknown")
+msg_ok "UV Package Manager installed (version: $UV_VERSION)"
 
 # --- Application Installation (Byparr) ---
 
@@ -249,10 +409,13 @@ msg_ok "Installed Byparr"
 
 # --- Systemd Service Setup ---
 
-msg_info "Creating Service Wrapper Script for Xvfb and Byparr"
+# Get the port from environment variable or use default
+BYPARR_PORT="${BYPARR_PORT:-8191}"
+msg_info "Creating Service Wrapper Script for Xvfb and Byparr (port: $BYPARR_PORT)"
+
 # Create a wrapper script to manage Xvfb and Byparr execution.
 # This script is used by the systemd service.
-cat <<'EOT' >"/opt/byparr/run_byparr_with_xvfb.sh"
+cat <<EOT >"/opt/byparr/run_byparr_with_xvfb.sh"
 #!/bin/bash
 # This script starts Xvfb and then runs Byparr.
 # It ensures Xvfb is terminated when Byparr exits or the script is stopped.
@@ -261,19 +424,19 @@ cat <<'EOT' >"/opt/byparr/run_byparr_with_xvfb.sh"
 # -screen 0 1920x1080x24: Configures a virtual screen with 24-bit color depth.
 # -nolisten tcp: Disables TCP listening for security.
 Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp &
-XVFB_PID=$! # Store Xvfb's Process ID.
+XVFB_PID=\$! # Store Xvfb's Process ID.
 
 # Trap signals to ensure Xvfb is killed when the script exits.
 # This handles cases like 'systemctl stop byparr' or if Byparr crashes.
-trap 'kill $XVFB_PID; wait $XVFB_PID 2>/dev/null' INT TERM EXIT
+trap 'kill \$XVFB_PID; wait \$XVFB_PID 2>/dev/null' INT TERM EXIT
 
 # Wait briefly for Xvfb to initialize.
 sleep 2
 
-# Run Byparr using 'uv'.
+# Run Byparr using 'uv' with the configured port
 # The 'uv run' command executes a command from the project's environment.
 # Environment variables (PATH, DISPLAY, HOME) are set in the systemd service file.
-uv run python -m byparr
+BYPARR_PORT=${BYPARR_PORT} uv run python -m byparr
 
 # The trap will handle killing Xvfb when 'uv run python -m byparr' exits.
 EOT
@@ -281,6 +444,33 @@ chmod +x "/opt/byparr/run_byparr_with_xvfb.sh"
 msg_ok "Created and configured Service Wrapper Script"
 
 msg_info "Creating systemd Service File for Byparr"
+
+# Determine if we should run as non-root user based on container type
+# CT_TYPE is exported from the main script: 1 = unprivileged, 0 = privileged
+CT_TYPE="${CTTYPE:-1}"  # Default to unprivileged if not set
+
+if [ "$CT_TYPE" = "1" ]; then
+  # For unprivileged containers, create a dedicated user for better security
+  msg_info "Setting up dedicated byparr user for unprivileged container"
+  
+  # Create byparr user if it doesn't exist
+  if ! id -u byparr >/dev/null 2>&1; then
+    useradd -r -m -d /opt/byparr-home -s /bin/bash byparr
+  fi
+  
+  # Set proper permissions
+  chown -R byparr:byparr /opt/byparr
+  
+  # Service will run as byparr user
+  SERVICE_USER="byparr"
+  HOME_DIR="/opt/byparr-home"
+else
+  # For privileged containers, run as root as requested by user
+  msg_info "Container is privileged, service will run as root"
+  SERVICE_USER="root"
+  HOME_DIR="/root"
+fi
+
 # Create the systemd service file for Byparr.
 # This defines how Byparr is started, managed, and run as a background service.
 cat <<EOF >"/etc/systemd/system/byparr.service"
@@ -291,17 +481,25 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=${SERVICE_USER}
 WorkingDirectory=/opt/byparr
 
 # Environment variables for the Byparr process
-Environment="PATH=/root/.local/bin:/root/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=${HOME_DIR}/.local/bin:${HOME_DIR}/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 Environment="DISPLAY=:99"
-Environment="HOME=/root"
+Environment="HOME=${HOME_DIR}"
+Environment="BYPARR_PORT=${BYPARR_PORT}"
 
 # Command to start Byparr using the wrapper script
 ExecStart=/opt/byparr/run_byparr_with_xvfb.sh
 
+# Security settings
+ProtectSystem=full
+PrivateTmp=true
+NoNewPrivileges=true
+RestrictSUIDSGID=true
+
+# Restart policy
 Restart=on-failure
 RestartSec=10
 
@@ -317,40 +515,260 @@ msg_ok "Created and enabled systemd Service File"
 # --- Update Script Creation ---
 
 msg_info "Creating Update Script for Byparr"
-# Create a simple script to automate Byparr updates.
+# Create a robust script to automate Byparr updates.
 cat <<'EOF' >"/opt/update-byparr.sh"
 #!/bin/bash
 # This script updates the Byparr installation.
 set -e # Exit immediately if a command exits with a non-zero status.
 
-echo "Updating Byparr..."
+# Function to log messages with timestamps
+log() {
+  msg_info "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
 
-# Stop the Byparr service
-echo "Stopping Byparr service..."
-systemctl stop byparr
+# Function to handle errors
+error_exit() {
+  msg_error "ERROR: $1"
+  # Try to restart the service if it was running before
+  if [ "$SERVICE_WAS_ACTIVE" = "true" ]; then
+    msg_info "Attempting to restart Byparr service..."
+    systemctl start byparr || msg_error "Failed to restart service. Please check manually."
+  fi
+  exit 1
+}
+
+# Function to find and set up UV in PATH
+setup_uv_path() {
+  # Add all possible UV locations to PATH
+  export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:$PATH"
+  
+  # Source cargo environment if available
+  if [ -f "$HOME/.cargo/env" ]; then
+    source "$HOME/.cargo/env"
+  fi
+  
+  # Verify UV is in PATH
+  if command -v uv >/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}
+
+log "Starting Byparr update process..."
+
+# Check if the service is currently running
+if systemctl is-active --quiet byparr; then
+  SERVICE_WAS_ACTIVE="true"
+  log "Byparr service is currently running. Stopping service..."
+  systemctl stop byparr || error_exit "Failed to stop Byparr service"
+else
+  SERVICE_WAS_ACTIVE="false"
+  log "Byparr service is not currently running."
+fi
+
+# Create a backup of the current installation
+log "Creating backup of current installation..."
+BACKUP_DIR="/opt/byparr-backup-$(date '+%Y%m%d%H%M%S')"
+cp -r /opt/byparr "$BACKUP_DIR" || error_exit "Failed to create backup"
+log "Backup created at $BACKUP_DIR"
 
 # Navigate to the Byparr directory
-cd /opt/byparr || { echo "Failed to cd to /opt/byparr"; exit 1; }
+cd /opt/byparr || error_exit "Failed to cd to /opt/byparr"
+
+# Check for local changes
+if ! git diff --quiet; then
+  log "Warning: Local changes detected in the repository."
+  log "Creating patch file of local changes..."
+  git diff > "$BACKUP_DIR/local-changes.patch"
+  log "Local changes saved to $BACKUP_DIR/local-changes.patch"
+  
+  # Ask if we should continue
+  read -p "Continue with update and discard local changes? (y/n): " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    log "Update aborted by user."
+    if [ "$SERVICE_WAS_ACTIVE" = "true" ]; then
+      log "Restarting Byparr service..."
+      systemctl start byparr || error_exit "Failed to restart service"
+    fi
+    exit 0
+  fi
+  
+  # Reset local changes
+  log "Resetting local changes..."
+  git reset --hard || error_exit "Failed to reset local changes"
+fi
 
 # Pull the latest changes from the Git repository
-echo "Pulling latest changes from Git..."
-git pull origin main # Assuming 'main' is the default branch
+log "Pulling latest changes from Git..."
+if ! git pull origin main; then
+  error_exit "Failed to pull latest changes from Git"
+fi
+
+# Set up UV path
+log "Setting up UV package manager..."
+setup_uv_path || error_exit "Failed to set up UV package manager"
 
 # Sync dependencies using uv
-echo "Syncing dependencies with uv..."
-# Ensure uv is in PATH if this script is run directly (not via systemd service context)
-# Adding this for robustness, though systemd service has PATH set.
-export PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
-uv sync
+log "Syncing dependencies with uv..."
+if ! uv sync; then
+  error_exit "Failed to sync dependencies with uv"
+fi
 
-# Start the Byparr service
-echo "Starting Byparr service..."
-systemctl start byparr
+# Start the Byparr service if it was running before
+if [ "$SERVICE_WAS_ACTIVE" = "true" ]; then
+  log "Starting Byparr service..."
+  if ! systemctl start byparr; then
+    error_exit "Failed to start Byparr service"
+  fi
+  
+  # Verify the service is running
+  sleep 3
+  if ! systemctl is-active --quiet byparr; then
+    error_exit "Byparr service failed to start properly"
+  fi
+  log "Byparr service started successfully"
+else
+  log "Byparr service was not running before update, not starting it"
+fi
 
-echo "Byparr updated successfully!"
+log "Byparr updated successfully!"
 EOF
 chmod +x "/opt/update-byparr.sh"
 msg_ok "Created Update Script"
+
+# --- Health Check Script Creation ---
+
+msg_info "Creating Health Check Script for Byparr"
+# Create a health check script to help diagnose issues
+cat <<'EOF' >"/opt/byparr-health-check.sh"
+#!/bin/bash
+# Byparr Health Check Script
+# This script checks the health of the Byparr installation and helps diagnose issues.
+
+# Function to log messages with timestamps
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+# Function to check if a command exists
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+# Print header
+echo "======================================"
+echo "      Byparr Health Check Script      "
+echo "======================================"
+echo ""
+
+# Check system resources
+log "Checking system resources..."
+echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | awk '{print $2 + $4}')%"
+echo "Memory Usage: $(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2}')"
+echo "Disk Usage: $(df -h /opt | awk 'NR==2{print $5}')"
+echo ""
+
+# Check if Byparr service is running
+log "Checking Byparr service status..."
+if systemctl is-active --quiet byparr; then
+  echo "✅ Byparr service is running"
+else
+  echo "❌ Byparr service is NOT running"
+  echo "Last 10 lines of service logs:"
+  journalctl -u byparr -n 10 --no-pager
+fi
+echo ""
+
+# Check if Xvfb is running
+log "Checking Xvfb process..."
+if pgrep Xvfb >/dev/null; then
+  echo "✅ Xvfb is running"
+else
+  echo "❌ Xvfb is NOT running"
+  echo "This may cause browser automation issues."
+fi
+echo ""
+
+# Check if Chrome is installed
+log "Checking Chrome installation..."
+if command_exists google-chrome; then
+  CHROME_VERSION=$(google-chrome --version 2>/dev/null || echo "Unknown")
+  echo "✅ Chrome is installed (Version: $CHROME_VERSION)"
+else
+  echo "❌ Chrome is NOT installed"
+  echo "This will prevent Byparr from functioning correctly."
+fi
+echo ""
+
+# Check if UV package manager is available
+log "Checking UV package manager..."
+if command_exists uv; then
+  UV_VERSION=$(uv --version 2>/dev/null || echo "Unknown")
+  echo "✅ UV package manager is available (Version: $UV_VERSION)"
+else
+  echo "❌ UV package manager is NOT available"
+  echo "This may cause issues with dependency management."
+fi
+echo ""
+
+# Check network connectivity to port 8191
+log "Checking network connectivity..."
+PORT=$(grep -o 'BYPARR_PORT=[0-9]*' /etc/systemd/system/byparr.service 2>/dev/null | cut -d= -f2)
+PORT=${PORT:-8191}  # Default to 8191 if not found
+
+if command_exists ss; then
+  if ss -tuln | grep -q ":$PORT "; then
+    echo "✅ Port $PORT is open and listening"
+  else
+    echo "❌ Port $PORT is NOT listening"
+    echo "This means Byparr is not accepting connections."
+  fi
+elif command_exists netstat; then
+  if netstat -tuln | grep -q ":$PORT "; then
+    echo "✅ Port $PORT is open and listening"
+  else
+    echo "❌ Port $PORT is NOT listening"
+    echo "This means Byparr is not accepting connections."
+  fi
+else
+  echo "⚠️ Cannot check port status (ss/netstat not available)"
+fi
+echo ""
+
+# Check if Byparr API is responding
+log "Checking Byparr API response..."
+if command_exists curl; then
+  RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$PORT/v1 2>/dev/null || echo "failed")
+  if [ "$RESPONSE" = "200" ]; then
+    echo "✅ Byparr API is responding (HTTP 200)"
+  else
+    echo "❌ Byparr API is NOT responding properly (Response: $RESPONSE)"
+    echo "This indicates Byparr is not functioning correctly."
+  fi
+else
+  echo "⚠️ Cannot check API response (curl not available)"
+fi
+echo ""
+
+# Print summary
+echo "======================================"
+echo "      Health Check Summary            "
+echo "======================================"
+echo ""
+echo "If you're experiencing issues, please check:"
+echo "1. Service logs: journalctl -u byparr -n 50"
+echo "2. Chrome: google-chrome --version"
+echo "3. Xvfb: ps aux | grep Xvfb"
+echo "4. Network: ss -tulpn | grep $PORT"
+echo ""
+echo "For more help, visit: https://github.com/ThePhaseless/Byparr"
+echo ""
+EOF
+
+chmod +x "/opt/byparr-health-check.sh"
+msg_ok "Created Health Check Script"
 
 # --- Finalization ---
 
