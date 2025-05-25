@@ -20,11 +20,6 @@ variables
 color
 catch_errors
 
-# Export variables for the installer script
-export BYPARR_PORT="$var_port"
-export FORK_REPO_URL="https://raw.githubusercontent.com/ColterD/byparr-lxc/main"
-export INSTALLER_URL="${FORK_REPO_URL}/install/byparr-install.sh"
-
 function update_script() {
   header_info
   if [[ ! -f /opt/byparr/run_byparr_with_xvfb.sh ]]; then
@@ -51,11 +46,3 @@ msg_ok "Completed Successfully!\n"
 echo -e "${CREATING}${GN}${APP} FlareSolverr Alternative setup has been successfully initialized!${CL}"
 echo -e "${INFO}${YW}Access it using the following URL:${CL}"
 echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:${var_port}${CL}"
-echo -e "${INFO}${YW}Use this URL in your *arr applications as the FlareSolverr URL${CL}"
-echo -e "${INFO}${YW}Container Type: $([ "$CT_TYPE" = "1" ] && echo "Unprivileged" || echo "Privileged")${CL}"
-echo -e "${INFO}${YW}Service User: $([ "$CT_TYPE" = "1" ] && echo "byparr" || echo "root")${CL}"
-echo -e "${INFO}${YW}Useful Commands:${CL}"
-echo -e "${TAB}${YW}- Update Byparr:        ${BGN}pct exec ${CT_ID} /opt/update-byparr.sh${CL}"
-echo -e "${TAB}${YW}- Check Byparr Health:  ${BGN}pct exec ${CT_ID} /opt/byparr-health-check.sh${CL}"
-echo -e "${TAB}${YW}- View Service Logs:    ${BGN}pct exec ${CT_ID} journalctl -u byparr -f${CL}"
-echo -e "${TAB}${YW}- Restart Service:      ${BGN}pct exec ${CT_ID} systemctl restart byparr${CL}"
