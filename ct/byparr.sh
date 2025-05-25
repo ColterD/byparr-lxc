@@ -1,25 +1,30 @@
 #!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)
 # License: MIT | https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
 # Source: https://github.com/ThePhaseless/Byparr
 
+# Download and source the build.func file
+if ! source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func); then
+  echo "Error: Failed to download build.func from community-scripts"
+  exit 1
+fi
+
+# Define application variables
 APP="Byparr"
-var_tags="${var_tags:-media}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-2048}"
 var_disk="${var_disk:-4}"
 var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
-var_port="${var_port:-8191}"
 var_unprivileged="${var_unprivileged:-1}"
 
-header_info "$APP"
+# Initialize variables and settings
 variables
 color
 catch_errors
 
+# Define update function
 function update_script() {
   header_info
   if [[ ! -f /opt/byparr/run_byparr_with_xvfb.sh ]]; then
@@ -32,17 +37,13 @@ function update_script() {
   exit
 }
 
+# Start the container creation process
 start
 build_container
 description
 
-msg_info "Setting Container Permissions"
-if [[ -n "${CT_ID:-}" ]]; then
-  pct set "$CT_ID" -features nesting=1,fuse=1
-fi
-msg_ok "Set Container Permissions"
-
+# Display completion message
 msg_ok "Completed Successfully!\n"
-echo -e "${CREATING}${GN}${APP} FlareSolverr Alternative setup has been successfully initialized!${CL}"
+echo -e "${CREATING}${GN}${APP} setup has been successfully initialized!${CL}"
 echo -e "${INFO}${YW}Access it using the following URL:${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:${var_port}${CL}"
+echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8191${CL}"
