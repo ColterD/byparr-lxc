@@ -2,7 +2,7 @@
 
 A community fork providing Proxmox VE LXC installation scripts for **Byparr** - a self-hosted FlareSolverr alternative built with FastAPI and nodriver.
 
-> **⚠️ Fork Notice**: This is a community fork by ColterD, not yet part of the official [Proxmox VE Helper Scripts](https://github.com/community-scripts/ProxmoxVE) project.
+> **⚠️ Fork Notice**: This is a community fork by ColterD, following [Proxmox VE Helper Scripts](https://github.com/community-scripts/ProxmoxVE) community standards.
 
 ## Quick Install
 
@@ -57,13 +57,13 @@ You can customize the installation by setting environment variables before runni
 export BYPARR_PORT=9000
 
 # Example: Increase RAM allocation to 4GB
-export BYPARR_RAM_SIZE=4096
+export var_ram=4096
 
 # Example: Use 4 CPU cores
-export BYPARR_CPU_COUNT=4
+export var_cpu=4
 
 # Example: Allocate 8GB disk space
-export BYPARR_DISK_SIZE=8
+export var_disk=8
 
 # Run the installer with custom settings
 bash -c "$(wget -qLO - https://raw.githubusercontent.com/ColterD/byparr-lxc/main/ct/byparr.sh)"
@@ -111,49 +111,22 @@ Or from Proxmox host:
 pct exec [CONTAINER-ID] /opt/update-byparr.sh
 ```
 
-### Health Check
-
-The installation includes a health check script to help diagnose issues:
-
-From within the container:
+Or using the LXC update command:
 ```bash
-/opt/byparr-health-check.sh
+bash -c "$(wget -qLO - https://raw.githubusercontent.com/ColterD/byparr-lxc/main/ct/byparr.sh)" && update
 ```
-
-Or from Proxmox host:
-```bash
-pct exec [CONTAINER-ID] /opt/byparr-health-check.sh
-```
-
-The health check will verify:
-- Service status
-- Xvfb display server
-- Chrome installation
-- Network connectivity
-- API responsiveness
-- System resources
 
 ## Troubleshooting
-
-### Quick Diagnostics
-
-Run the health check script for a comprehensive system check:
-```bash
-/opt/byparr-health-check.sh
-```
-
-This will check all critical components and provide a detailed report.
 
 ### Service Won't Start
 
 1. Check logs: `journalctl -u byparr -n 50`
 2. Verify Chrome: `google-chrome --version`
-3. Test manually: `cd /opt/byparr && source "$HOME/.cargo/env" && uv run python -m byparr` (This ensures 'uv' is in your PATH for the test).
-4. Check for error reports in `/root/byparr-install-failure-*.log` if installation failed
+3. Test manually: `cd /opt/byparr && source "$HOME/.cargo/env" && uv run python -m byparr`
 
 ### Port Already in Use
 
-Check what's using port 8191 (or your custom port):
+Check what's using port 8191:
 ```bash
 ss -tulpn | grep 8191
 ```
@@ -184,7 +157,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 - **Application**: `/opt/byparr/`
 - **Service**: `/etc/systemd/system/byparr.service`
 - **Update Script**: `/opt/update-byparr.sh`
-- **UV Package Manager**: Typically `/root/.local/bin/uv` or `/root/.cargo/bin/uv`. The installer attempts to add it to your PATH; if running `uv` fails, try sourcing `"$HOME/.cargo/env"` or relogging.
+- **Wrapper Script**: `/opt/byparr/run_byparr_with_xvfb.sh`
 
 ## Credits
 
@@ -198,7 +171,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 1. Fork the repository
 2. Create your feature branch
 3. Test thoroughly on Proxmox VE
-4. Submit a pull request
+4. Follow community standards from [Proxmox VE Helper Scripts](https://github.com/community-scripts/ProxmoxVE)
+5. Submit a pull request
 
 ## License
 
