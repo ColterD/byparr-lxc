@@ -1,14 +1,9 @@
 #!/usr/bin/env bash
+source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func)
 # Copyright (c) 2025 ColterD (Colter Dahlberg)
 # Author: ColterD (Colter Dahlberg)
 # License: MIT | https://github.com/ColterD/byparr-lxc/raw/main/LICENSE
 # Source: https://github.com/ThePhaseless/Byparr
-
-# Source the build.func file from community-scripts
-if ! source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/misc/build.func); then
-  echo "Error: Failed to source build.func from community-scripts"
-  exit 1
-fi
 
 APP="Byparr"
 var_tags="${var_tags:-media}"
@@ -20,12 +15,7 @@ var_version="${var_version:-12}"
 var_port="${var_port:-8191}"
 var_unprivileged="${var_unprivileged:-1}"
 
-# Display header and warnings
 header_info "$APP"
-echo -e "\e[1;33m⚠️  THIS IS A COMMUNITY FORK by ColterD\e[0m"
-echo -e "\e[1;33m⚠️  Not yet part of official community-scripts\e[0m"
-sleep 2
-
 variables
 color
 catch_errors
